@@ -53,7 +53,7 @@ def scrape_data(n_submissions = 10, max_sub_comments = 10):
                     user = comment.author
                     if user:
                         if user.name in scrapped_users: #check if the users data has already been parsed and skip parsing if True
-                            print ('user ' + user.name + 'already scraped')
+                            print ('user ' + user.name + ' already scraped')
                         else:
                             scrapped_users.append(user.name) #update already scrapped user cache with currently scraped user
                             for user_comment in user.get_comments(limit=None,_use_oauth=False):
