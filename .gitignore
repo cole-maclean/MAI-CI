@@ -1,4 +1,8 @@
 *.ini
 Final Project/reddit_data.json
+Final Project/test_reddit_data.json
 Final Project/scrapped_users.json
 Final Project/reddit_network.json
+Final Project/blogs_data/
+Final Project/tf_saves/
+*.gexf
