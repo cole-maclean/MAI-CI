@@ -16,6 +16,8 @@ config.read('secrets.ini')
 
 #load user agent string
 reddit_user_agent = config.get('reddit', 'user_agent')
+client_id = config.get('reddit', 'client_id')
+client_secret = config.get('reddit', 'client_api_key')
 
 #main data scrapping script
 def scrape_data(n_submissions = 10, max_sub_comments = 10):
@@ -33,7 +35,7 @@ def scrape_data(n_submissions = 10, max_sub_comments = 10):
     max_sub_comments - the maximum number of comments to randomly select from a random submission for author search and comment history parsing
 
     """
-    r = praw.Reddit(user_agent=reddit_user_agent) #initialize the praw Reddit object
+    r = praw.Reddit(user_agent=reddit_user_agent,client_id = client_id,client_secret=client_secret) #initialize the praw Reddit object
     translate_table = dict((ord(char), None) for char in string.punctuation) #dictionary lookup for removing punctuation characters in comment and submission title data
     stop = set(stopwords.words('english')) #english stop words to filter out non-useful words before storing
     stemmer = PorterStemmer() #stemming for similiar word aggregation
@@ -65,8 +67,7 @@ def scrape_data(n_submissions = 10, max_sub_comments = 10):
                                     #perform stop word, punctuation and stemming cleaning on comment body words
                                     if len(word) < 45 and word not in stop:
                                         clean_word = word.translate(translate_table)
-                                        wrd_stm = stemmer.stem(clean_word)
-                                        clean_comment_words.append(wrd_stm)
+                                        clean_comment_words.append(clean_word)
                                 #append username, subreddit name, submission title, comment utc timestamp and cleaned random comment body words to dataset
                                 reddit_data.append([user.name,user_comment.subreddit.display_name,user_comment.link_title.split(' '),
                                                                                   user_comment.created_utc,clean_comment_words])
