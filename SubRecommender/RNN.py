@@ -1,8 +1,50 @@
+import pandas as pd
 import numpy as np
 import tensorflow as tf
-from tensorflow.models.rnn.ptb import reader
+import json
+import random
 
 #Code and classes modified from http://r2rt.com/recurrent-neural-networks-in-tensorflow-ii.html
+
+
+class BucketedDataIterator():
+    def __init__(self, df, num_buckets = 5):
+        df = df.sort_values('seq_length').reset_index(drop=True)
+        self.size = len(df) / num_buckets
+        self.dfs = []
+        for bucket in range(num_buckets):
+            self.dfs.append(df.ix[bucket*self.size: (bucket+1)*self.size - 1])
+        self.num_buckets = num_buckets
+
+        # cursor[i] will be the cursor for the ith bucket
+        self.cursor = np.array([0] * num_buckets)
+        self.shuffle()
+
+        self.epochs = 0
+
+    def shuffle(self):
+        #sorts dataframe by sequence length, but keeps it random within the same length
+        for i in range(self.num_buckets):
+            self.dfs[i] = self.dfs[i].sample(frac=1).reset_index(drop=True)
+            self.cursor[i] = 0
+
+    def next_batch(self, n):
+        if np.any(self.cursor+n+1 > self.size):
+            self.epochs += 1
+            self.shuffle()
+
+        i = np.random.randint(0,self.num_buckets)
+
+        res = self.dfs[i].ix[self.cursor[i]:self.cursor[i]+n-1]
+        self.cursor[i] += n
+
+        # Pad sequences with 0s so they are all the same length
+        maxlen = max(res['seq_length'])
+        x = np.zeros([n, maxlen], dtype=np.int32)
+        for i, x_i in enumerate(x):
+            x_i[:res['seq_length'].values[i]] = res['sub_label'].values[i]
+
+        return x, res['sub_label'], res['seq_length']
 
 class GRUCell(tf.nn.rnn_cell.RNNCell):
     """Gated Recurrent Unit cell (cf. http://arxiv.org/abs/1406.1078)."""
@@ -119,111 +161,111 @@ class LayerNormalizedLSTMCell(tf.nn.rnn_cell.RNNCell):
 
             return new_h, new_state
 
+def reset_graph():
+    if 'sess' in globals() and sess:
+        sess.close()
+    tf.reset_default_graph()
 
-def gen_epochs(data, n, num_steps, batch_size):
-    for i in range(n):
-        yield reader.ptb_iterator(data, batch_size, num_steps)
-
-
-def train_network(g, data, num_epochs, num_steps = 200, batch_size = 32, verbose = True, save=False):
-    tf.set_random_seed(2345)
-    with tf.Session() as sess:
-        print(sess.run(tf.global_variables_initializer()))
-        training_losses = []
-        for idx, epoch in enumerate(gen_epochs(data,num_epochs, num_steps, batch_size)):
-            training_loss = 0
-            steps = 0
-            training_state = None
-            for X, Y in epoch:
-                steps += 1
-
-                feed_dict={g['x']: X, g['y']: Y}
-                if training_state is not None:
-                    feed_dict[g['init_state']] = training_state
-                training_loss_, training_state, _ = sess.run([g['total_loss'],
-                                                      g['final_state'],
-                                                      g['train_step']],
-                                                             feed_dict)
-                training_loss += training_loss_
-            if verbose:
-                print("Average training loss for Epoch", idx, ":", training_loss/steps)
-            training_losses.append(training_loss/steps)
-
-        if isinstance(save, str):
-            g['saver'].save(sess, save)
-
-    return training_losses
-
-def build_graph(
-    num_classes,
-    cell_type = None,
-    num_weights_for_custom_cell = 5,
-    state_size = 100,
-    batch_size = 32,
-    num_steps = 200,
-    num_layers = 3,
-    build_with_dropout=False,
-    learning_rate = 1e-4):
+def build_graph(vocab,state_size = 64,batch_size = 256):
+    
+    vocab_size = len(vocab)
+    num_classes = len(vocab)
 
     reset_graph()
 
-    x = tf.placeholder(tf.int32, [batch_size, num_steps], name='input_placeholder')
-    y = tf.placeholder(tf.int32, [batch_size, num_steps], name='labels_placeholder')
+    # Placeholders
+    x = tf.placeholder(tf.int32, [batch_size, None]) # [batch_size, num_steps]
+    seqlen = tf.placeholder(tf.int32, [batch_size])
+    y = tf.placeholder(tf.int32, [batch_size])
+    keep_prob = tf.placeholder_with_default(1.0, [])
 
-    dropout = tf.constant(1.0)
-
-    embeddings = tf.get_variable('embedding_matrix', [num_classes, state_size])
-
+    # Embedding layer
+    embeddings = tf.get_variable('embedding_matrix', [vocab_size, state_size])
     rnn_inputs = tf.nn.embedding_lookup(embeddings, x)
 
-    if cell_type == 'Custom':
-        cell = CustomCell(state_size, num_weights_for_custom_cell)
-    elif cell_type == 'GRU':
-        cell = tf.nn.rnn_cell.GRUCell(state_size)
-    elif cell_type == 'LSTM':
-        cell = tf.nn.rnn_cell.LSTMCell(state_size, state_is_tuple=True)
-    elif cell_type == 'LN_LSTM':
-        cell = LayerNormalizedLSTMCell(state_size)
-    else:
-        cell = tf.nn.rnn_cell.BasicRNNCell(state_size)
+    # RNN
+    cell = tf.nn.rnn_cell.GRUCell(state_size)
+    init_state = tf.get_variable('init_state', [1, state_size],
+                                 initializer=tf.constant_initializer(0.0))
+    init_state = tf.tile(init_state, [batch_size, 1])
+    rnn_outputs, final_state = tf.nn.dynamic_rnn(cell, rnn_inputs, sequence_length=seqlen,
+                                                 initial_state=init_state)
 
-    if build_with_dropout:
-        cell = tf.nn.rnn_cell.DropoutWrapper(cell, input_keep_prob=dropout)
+    # Add dropout, as the model otherwise quickly overfits
+    rnn_outputs = tf.nn.dropout(rnn_outputs, keep_prob)
 
-    if cell_type == 'LSTM' or cell_type == 'LN_LSTM':
-        cell = tf.nn.rnn_cell.MultiRNNCell([cell] * num_layers, state_is_tuple=True)
-    else:
-        cell = tf.nn.rnn_cell.MultiRNNCell([cell] * num_layers)
+    """
+    Obtain the last relevant output. The best approach in the future will be to use:
 
-    if build_with_dropout:
-        cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=dropout)
+        last_rnn_output = tf.gather_nd(rnn_outputs, tf.pack([tf.range(batch_size), seqlen-1], axis=1))
 
-    init_state = cell.zero_state(batch_size, tf.float32)
-    rnn_outputs, final_state = tf.nn.dynamic_rnn(cell, rnn_inputs, initial_state=init_state)
+    which is the Tensorflow equivalent of numpy's rnn_outputs[range(30), seqlen-1, :], but the
+    gradient for this op has not been implemented as of this writing.
 
+    The below solution works, but throws a UserWarning re: the gradient.
+    """
+    idx = tf.range(batch_size)*tf.shape(rnn_outputs)[1] + (seqlen - 1)
+    last_rnn_output = tf.gather(tf.reshape(rnn_outputs, [-1, state_size]), idx)
+
+    # Softmax layer
     with tf.variable_scope('softmax'):
         W = tf.get_variable('W', [state_size, num_classes])
         b = tf.get_variable('b', [num_classes], initializer=tf.constant_initializer(0.0))
+    logits = tf.matmul(last_rnn_output, W) + b
+    preds = tf.nn.softmax(logits)
+    correct = tf.equal(tf.cast(tf.argmax(preds,1),tf.int32), y)
+    accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
-    #reshape rnn_outputs and y
-    rnn_outputs = tf.reshape(rnn_outputs, [-1, state_size])
-    y_reshaped = tf.reshape(y, [-1])
+    loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits, y))
+    train_step = tf.train.AdamOptimizer(1e-4).minimize(loss)
 
-    logits = tf.matmul(rnn_outputs, W) + b
+    return {
+        'x': x,
+        'seqlen': seqlen,
+        'y': y,
+        'dropout': keep_prob,
+        'loss': loss,
+        'ts': train_step,
+        'preds': preds,
+        'accuracy': accuracy,
+        'saver': tf.train.Saver()
+    }
 
-    predictions = tf.nn.softmax(logits)
+def train_graph(graph,train,test, batch_size = 256, num_epochs = 10, iterator = BucketedDataIterator,save=False):
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        tr = iterator(train)
+        te = iterator(test)
 
-    total_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits, y_reshaped))
-    train_step = tf.train.AdamOptimizer(learning_rate).minimize(total_loss)
+        step, accuracy = 0, 0
+        tr_losses, te_losses = [], []
+        current_epoch = 0
+        while current_epoch < num_epochs:
+            step += 1
+            batch = tr.next_batch(batch_size)
+            feed = {g['x']: batch[0], g['y']: batch[1], g['seqlen']: batch[2], g['dropout']: 0.6}
+            accuracy_, _ = sess.run([g['accuracy'], g['ts']], feed_dict=feed)
+            accuracy += accuracy_
 
-    return dict(
-        x = x,
-        y = y,
-        init_state = init_state,
-        final_state = final_state,
-        total_loss = total_loss,
-        train_step = train_step,
-        preds = predictions,
-        saver = tf.train.Saver(),
-        inputs = rnn_inputs
-    )
+            if tr.epochs > current_epoch:
+                current_epoch += 1
+                tr_losses.append(accuracy / step)
+                step, accuracy = 0, 0
+
+                #eval test set
+                te_epoch = te.epochs
+                while te.epochs == te_epoch:
+                    step += 1
+                    batch = te.next_batch(batch_size)
+                    feed = {g['x']: batch[0], g['y']: batch[1], g['seqlen']: batch[2]}
+                    accuracy_ = sess.run([g['accuracy']], feed_dict=feed)[0]
+                    accuracy += accuracy_
+
+                te_losses.append(accuracy / step)
+                step, accuracy = 0,0
+                print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1], "- te:", te_losses[-1])
+                
+        if isinstance(save, str):
+            g['saver'].save(sess, save)
+
+    return tr_losses, te_losses
