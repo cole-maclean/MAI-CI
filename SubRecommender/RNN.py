@@ -231,7 +231,7 @@ def build_graph(vocab,state_size = 64,batch_size = 256):
         'saver': tf.train.Saver()
     }
 
-def train_graph(graph,train,test, batch_size = 256, num_epochs = 10, iterator = BucketedDataIterator,save=False):
+def train_graph(g,train,test, batch_size = 256, num_epochs = 10, iterator = BucketedDataIterator,save=False):
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         tr = iterator(train)
@@ -269,3 +269,13 @@ def train_graph(graph,train,test, batch_size = 256, num_epochs = 10, iterator = 
             g['saver'].save(sess, save)
 
     return tr_losses, te_losses
+
+def recommend_subs(g, checkpoint,pred_data,batch_size):
+    te = BucketedDataIterator(pred_data,num_buckets=1)
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        g['saver'].restore(sess, checkpoint)
+        batch = te.next_batch(batch_size)
+        feed = {g['x']: batch[0],g['y']: batch[1], g['seqlen']: batch[2]}
+        preds = sess.run([g['preds']], feed_dict=feed)[0]
+        return tf.cast(tf.argmax(preds,1),tf.int32).eval()

@@ -1,22 +1,38 @@
 #TODO: Error catching/ pipeling step checking
 #TODO: add params to train_network
 
-import RNN
+import rnn
 import json
 import pandas as pd
 import random
+import numpy as np
 
 def chunks(l, n):
     n = max(1, n)
     return (l[i:i+n] for i in range(0, len(l), n))
 
+def build_user_comment_df(sub_cmt_list,chunk_size,batch_size):
+    comment_chunks = chunks(sub_cmt_list,chunk_size)
+    usr_seqs = [chnk for chnk in comment_chunks]
+    padded_seqs = pad_pred_data(usr_seqs,batch_size)
+    df = pd.DataFrame({'sub_seqs':padded_seqs})
+    df['sub_label'] = -1
+    df['seq_length'] = df.apply (lambda row: len(row['sub_seqs']),axis=1)
+    return df
+
+def pad_pred_data(pred_data,batch_size):
+    i = len(pred_data)
+    while i < batch_size:
+        pred_data.append([0])
+        i = i + 1
+    return pred_data
 
 class SubRecommender():
 
-    def __init__(self, train_data_file='',batch_size = 256, test_data_file='',saved_model=''):
+    def __init__(self, sequence_chunk_size = 25, train_data_file='',batch_size = 256,save_model_file=''):
+        self.sequence_chunk_size = sequence_chunk_size
         self.train_data_file = train_data_file
-        self.test_data_file = test_data_file
-        self.saved_model = saved_model
+        self.save_model_file = save_model_file
         self.batch_size = batch_size
 
     def load_train_df(self):
@@ -32,7 +48,7 @@ class SubRecommender():
         self.training_seq_lengths = []
         for usr in users:
             user_comment_subs = list(df.loc[df['user'] == usr]['subreddit'].values)
-            comment_chunks = chunks(user_comment_subs,25)
+            comment_chunks = chunks(user_comment_subs,self.sequence_chunk_size)
             for chnk in comment_chunks:
                 label = sub_list.index(random.choice(chnk))
                 self.training_labels.append(label)
@@ -53,45 +69,14 @@ class SubRecommender():
         self.train, self.test = train_df.ix[:train_len-1], train_df.ix[train_len:train_len + test_len]
         return self.train, self.test 
 
-    def train_network(self,save=''):
+    def train_network(self):
         train_df = self.load_train_df()
         train,test = self.split_train_test(train_df,0.8)
-        g = build_graph(vocab=self.vocab,batch_size=self.batch_size)
-        tr_losses, te_losses = train_graph(g,train,test,num_epochs=1,batch_size=self.batch_size,
-                                   save=save)
+        self.g = rnn.build_graph(vocab=self.vocab,batch_size=self.batch_size)
+        tr_losses, te_losses = rnn.train_graph(self.g,train,test,num_epochs=1,batch_size=self.batch_size,
+                                   save=self.save_model_file)
         return tr_losses,te_losses
 
-
-    def generate_predictions(self, g, checkpoint, num_pred_subs,state=None, prompt_sequence=['AskReddit'], pick_top_subs=None):
-        """ Accepts a current character, initial state"""
-
-        with tf.Session() as sess:
-            print(sess.run(tf.global_variables_initializer()))
-            g['saver'].restore(sess, checkpoint)
-            
-            subs = []
-            for seed_sub in prompt_sequence:
-                current_sub = vocab_to_idx[seed_sub]
-                subs.append(idx_to_vocab[current_sub])
-                if state is not None:
-                    feed_dict={g['x']: [[current_sub]], g['init_state']: state}
-                else:
-                    feed_dict={g['x']: [[current_sub]]}
-
-            for i in range(num_pred_subs):
-                if state is not None:
-                    feed_dict={g['x']: [[current_sub]], g['init_state']: state}
-                else:
-                    feed_dict={g['x']: [[current_sub]]}
-
-                preds, state = sess.run([g['preds'],g['final_state']], feed_dict)
-
-                if pick_top_subs is not None:
-                    p = np.squeeze(preds)
-                    p[np.argsort(p)[:-pick_top_subs]] = 0
-                    p = p / np.sum(p)
-                    current_sub = np.random.choice(vocab_size, 1, p=p)[0]
-                else:
-                    current_sub = np.random.choice(vocab_size, 1, p=np.squeeze(preds))[0]
-                subs.append(idx_to_vocab[current_sub])
-        return subs
+    def rec_subs(self,sub_cmt_list):
+        user_df = build_user_comment_df(sub_cmt_list,self.sequence_chunk_size,self.batch_size)
+        return rnn.recommend_subs(self.g,self.save_model_file,user_df,self.batch_size)
