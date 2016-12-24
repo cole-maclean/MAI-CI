@@ -278,4 +278,4 @@ def recommend_subs(g, checkpoint,pred_data,batch_size):
         batch = te.next_batch(batch_size)
         feed = {g['x']: batch[0],g['y']: batch[1], g['seqlen']: batch[2]}
         preds = sess.run([g['preds']], feed_dict=feed)[0]
-        return tf.cast(tf.argmax(preds,1),tf.int32).eval()
+        return preds,tf.cast(tf.argmax(preds,1),tf.int32).eval()
