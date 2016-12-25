@@ -44,46 +44,49 @@ def scrape_data(n_submissions = 10, max_sub_comments = 10,dataset='train',nlp_da
         nlp_flag = 'nlp'
     else:
         nlp_flag = ''
-    r = praw.Reddit(user_agent=reddit_user_agent,client_id = client_id,client_secret=client_secret) #initialize the praw Reddit object
-    translate_table = dict((ord(char), None) for char in string.punctuation) #dictionary lookup for removing punctuation characters in comment and submission title data
-    stop = set(stopwords.words('english')) #english stop words to filter out non-useful words before storing
-    stemmer = PorterStemmer() #stemming for similiar word aggregation
-    with open('data/' + dataset + '_reddit_data' + nlp_flag + '.json','r') as data_file:    
-        reddit_data = json.load(data_file)
-    with open('data/scrapped_users.json','r') as data_file:    
-        scrapped_users = json.load(data_file)
-    for i in range(n_submissions):
-        print ("scrapping " + str(i) + "th subreddit")
-        rand_submission = r.get_random_submission()
-        print ("scrapping users from subreddit r/" + rand_submission.subreddit.display_name)
-        sub_comments = rand_submission.comments
-        if len(sub_comments) >=3: #ensure submission has > 3 comments to filter out submissions with 0 comments, and submissions only containing AutoModerator posts
-            rnd_comments = random.sample(sub_comments,min(len(sub_comments),max_sub_comments)) #select randon number of the min of total number of comments in submission or max_sub_comments
-            for comment in rnd_comments:
-                if isinstance(comment, praw.objects.Comment): #check that return object is a comment object (sometimes a a MoreComment object is returned, which are not currently parsed)
-                    user = comment.author
-                    if user:
-                        if user.name in scrapped_users: #check if the users data has already been parsed and skip parsing if True
-                            print ('user ' + user.name + ' already scraped')
-                        else:
-                            scrapped_users.append(user.name) #update already scrapped user cache with currently scraped user
-                            for user_comment in user.get_comments(limit=None,_use_oauth=False):
-                                if nlp_data == True:
-                                    body = user_comment.body.split()
-                                    #filter out all but the min of 10 words or the total body word count from the comments body to reduce the dataset size.
-                                    rand_words = random.sample(body,min(10,len(body)))
-                                    clean_comment_words = []
-                                    for word in rand_words:
-                                        #perform stop word, punctuation and stemming cleaning on comment body words
-                                        if len(word) < 45 and word not in stop:
-                                            clean_word = word.translate(translate_table)
-                                            clean_comment_words.append(clean_word)
-                                    #append username, subreddit name, submission title, comment utc timestamp and cleaned random comment body words to dataset
-                                    reddit_data.append([user.name,user_comment.subreddit.display_name,user_comment.link_title.split(' '),
-                                                                                      user_comment.created_utc,clean_comment_words])
+        r = praw.Reddit(user_agent=reddit_user_agent,client_id = client_id,client_secret=client_secret) #initialize the praw Reddit object
+        translate_table = dict((ord(char), None) for char in string.punctuation) #dictionary lookup for removing punctuation characters in comment and submission title data
+        stop = set(stopwords.words('english')) #english stop words to filter out non-useful words before storing
+        stemmer = PorterStemmer() #stemming for similiar word aggregation
+        with open('data/' + dataset + '_reddit_data' + nlp_flag + '.json','r') as data_file:    
+            reddit_data = json.load(data_file)
+        with open('data/scrapped_users.json','r') as data_file:    
+            scrapped_users = json.load(data_file)
+        for i in range(n_submissions):
+            try:
+                print ("scrapping " + str(i) + "th subreddit")
+                rand_submission = r.get_random_submission()
+                print ("scrapping users from subreddit r/" + rand_submission.subreddit.display_name)
+                sub_comments = rand_submission.comments
+                if len(sub_comments) >=3: #ensure submission has > 3 comments to filter out submissions with 0 comments, and submissions only containing AutoModerator posts
+                    rnd_comments = random.sample(sub_comments,min(len(sub_comments),max_sub_comments)) #select randon number of the min of total number of comments in submission or max_sub_comments
+                    for comment in rnd_comments:
+                        if isinstance(comment, praw.objects.Comment): #check that return object is a comment object (sometimes a a MoreComment object is returned, which are not currently parsed)
+                            user = comment.author
+                            if user:
+                                if user.name in scrapped_users: #check if the users data has already been parsed and skip parsing if True
+                                    print ('user ' + user.name + ' already scraped')
                                 else:
-                                    reddit_data.append([user.name,user_comment.subreddit.display_name,
-                                                  user_comment.created_utc])
+                                    scrapped_users.append(user.name) #update already scrapped user cache with currently scraped user
+                                    for user_comment in user.get_comments(limit=None,_use_oauth=False):
+                                        if nlp_data == True:
+                                            body = user_comment.body.split()
+                                            #filter out all but the min of 10 words or the total body word count from the comments body to reduce the dataset size.
+                                            rand_words = random.sample(body,min(10,len(body)))
+                                            clean_comment_words = []
+                                            for word in rand_words:
+                                                #perform stop word, punctuation and stemming cleaning on comment body words
+                                                if len(word) < 45 and word not in stop:
+                                                    clean_word = word.translate(translate_table)
+                                                    clean_comment_words.append(clean_word)
+                                            #append username, subreddit name, submission title, comment utc timestamp and cleaned random comment body words to dataset
+                                            reddit_data.append([user.name,user_comment.subreddit.display_name,user_comment.link_title.split(' '),
+                                                                                              user_comment.created_utc,clean_comment_words])
+                                        else:
+                                            reddit_data.append([user.name,user_comment.subreddit.display_name,
+                                                          user_comment.created_utc])
+            except:
+                pass
     #dump scrapped dataset to script                   
     with open('data/' + dataset + '_reddit_data' + nlp_flag + '.json','w') as data_file:
         json.dump(reddit_data, data_file)

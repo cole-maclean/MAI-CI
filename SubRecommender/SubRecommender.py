@@ -62,11 +62,13 @@ class SubRecommender():
             user_comment_subs = list(df.loc[df['user'] == usr]['subreddit'].values)
             comment_chunks = chunks(user_comment_subs,self.sequence_chunk_size)
             for chnk in comment_chunks:
-                label = sub_list.index(random.choice([sub for sub in chnk if sub not in filtered_top_subs]))
-                self.training_labels.append(label)
-                chnk_seq = [sub_list.index(sub) for sub in chnk if sub_list.index(sub) != label]
-                self.training_sequences.append(chnk_seq)  
-                self.training_seq_lengths.append(len(chnk_seq))
+                filter_top = [sub for sub in chnk if sub not in filtered_top_subs]
+                if filter_top:
+                    label = sub_list.index(random.choice(filter_top))
+                    self.training_labels.append(label)
+                    chnk_seq = [sub_list.index(sub) for sub in chnk if sub_list.index(sub) != label]
+                    self.training_sequences.append(chnk_seq)  
+                    self.training_seq_lengths.append(len(chnk_seq))
         return pd.DataFrame({'sub_seqs':self.training_sequences,'sub_label':self.training_labels,'seq_length':self.training_seq_lengths})
 
     def create_vocab(self,sub_reddits):
@@ -92,4 +94,4 @@ class SubRecommender():
     def rec_subs(self,sub_cmt_list):
         user_df = build_user_comment_df(sub_cmt_list,self.sequence_chunk_size,self.batch_size)
         preds,rec_subs =  rnn.recommend_subs(self.g,self.save_model_file,user_df,self.batch_size)
-        return sorted([(self.idx_to_vocab[sub],preds[i,sub]) for i,sub in enumerate(rec_subs)],key=lambda x: x[1],ascending=False)
+        return sorted([(self.idx_to_vocab[sub],preds[i,sub]) for i,sub in enumerate(rec_subs)],key=lambda x: x[1],reverse=True)
