@@ -59,19 +59,20 @@ class SubRecommender():
             if i % int(len(users)/10) == 0:
                 print("Sequence Builder " + str(round(i/len(users)*100,0)) + " % Complete")
             if usr in sequence_cache.keys():
-                user_comment_subs = sequence_cache[usr]
+                usr_sub_seq = sequence_cache[usr]
             else:
                 user_comment_subs = list(df.loc[df['user'] == usr]['subreddit'].values)
-                sequence_cache[usr] = user_comment_subs
-            comment_chunks = chunks(user_comment_subs,self.sequence_chunk_size)
+                usr_sub_seq = [] #build sequence of non-repeating subreddit interactions
+                for i,sub in enumerate(user_comment_subs):
+                    if i ==0:
+                        usr_sub_seq.append(sub)
+                    elif sub != user_comment_subs[i-1]:#Check that current sub isn't repeated action of previous sub
+                        usr_sub_seq.append(sub)
+                sequence_cache[usr] = usr_sub_seq
+            comment_chunks = chunks(usr_sub_seq,self.sequence_chunk_size)
             for chnk in comment_chunks:
                 label = sub_list.index(IndexedSet(chnk)[-1])#Last interacted with subreddit in chunk
-                chnk_seq = [] #build sequence of non-repeating subreddit interactions
-                for i,sub in enumerate(chnk):
-                    if i ==0 and sub_list.index(sub) != label:
-                        chnk_seq.append(sub_list.index(sub))
-                    elif sub_list.index(sub) != label and sub != chnk[i-1]:
-                        chnk_seq.append(sub_list.index(sub))
+                chnk_seq = [sub_list.index(sub) for sub in chnk if sub_list.index(sub) != label] 
                 if len(chnk_seq) > self.min_seq_length:
                     self.training_sequences.append(chnk_seq)  
                     self.training_seq_lengths.append(len(chnk_seq))
