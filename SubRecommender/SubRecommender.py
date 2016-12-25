@@ -30,11 +30,12 @@ def pad_pred_data(pred_data,batch_size):
 
 class SubRecommender():
 
-    def __init__(self, sequence_chunk_size = 25, train_data_file='',batch_size = 256,save_model_file=''):
+    def __init__(self, sequence_chunk_size = 51,min_seq_length=5 train_data_file='',batch_size = 256,save_model_file=''):
         self.sequence_chunk_size = sequence_chunk_size
         self.train_data_file = train_data_file
         self.save_model_file = save_model_file
         self.batch_size = batch_size
+        self.min_seq_length = min_seq_length
 
     def load_train_df(self):
         print("Loading Training Data")
@@ -61,11 +62,19 @@ class SubRecommender():
                 sequence_cache[usr] = user_comment_subs
             comment_chunks = chunks(user_comment_subs,self.sequence_chunk_size)
             for chnk in comment_chunks:
-                label = IndexedSet(chnk)[-1]#Last interacted with subreddit in chunk
-                self.training_labels.append(label)
-                chnk_seq = [sub_list.index(sub) for sub in chnk if sub_list.index(sub) != label]
-                self.training_sequences.append(chnk_seq)  
-                self.training_seq_lengths.append(len(chnk_seq))
+                    label = sub_list.index(IndexedSet(chnk)[-1])#Last interacted with subreddit in chunk
+                    chnk_seq = [] #build sequence of non-repeating subreddit interactions
+                    for i,sub in enumerate(chnk):
+                        if i ==0 and sub_list.index(sub) != label:
+                            chnk_seq.append(sub_list.index(sub))
+                        elif sub_list.index(sub) != label and sub != chnk[i-1]]
+                            chnk_seq.append(sub_list.index(sub))
+                if len(chnk_seq) > self.min_seq_length:
+                    self.training_sequences.append(chnk_seq)  
+                    self.training_seq_lengths.append(len(chnk_seq))
+                    self.training_labels.append(label)
+        with open("data/user_comment_sequence_cache.json",'w') as cache_file:
+            json.dump(sequence_cache,cache_file)
         return pd.DataFrame({'sub_seqs':self.training_sequences,'sub_label':self.training_labels,'seq_length':self.training_seq_lengths})
 
     def create_vocab(self,sub_reddits):
@@ -82,7 +91,8 @@ class SubRecommender():
         return self.train, self.test 
 
     def train_network(self,num_epochs=10):
-        train_df = self.load_train_df()
+        if self.training_labels == []:
+            train_df = self.load_train_df()
         train,test = self.split_train_test(train_df,0.8)
         print("Building Graph")
         self.g = rnn.build_graph(vocab=self.vocab,batch_size=self.batch_size)
