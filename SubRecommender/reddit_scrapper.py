@@ -57,7 +57,8 @@ def scrape_data(n_submissions = 10, max_sub_comments = 10,dataset='train',nlp_da
                 print ("scrapping " + str(i) + "th subreddit")
                 rand_submission = r.get_random_submission()
                 print ("scrapping users from subreddit r/" + rand_submission.subreddit.display_name)
-                sub_comments = rand_submission.comments
+                rand_submission.replace_more_comments(limit=None, threshold=0)
+                sub_comments = praw.helpers.flatten_tree(rand_submission.comments)
                 if len(sub_comments) >=3: #ensure submission has > 3 comments to filter out submissions with 0 comments, and submissions only containing AutoModerator posts
                     rnd_comments = random.sample(sub_comments,min(len(sub_comments),max_sub_comments)) #select randon number of the min of total number of comments in submission or max_sub_comments
                     for comment in rnd_comments:
@@ -68,7 +69,7 @@ def scrape_data(n_submissions = 10, max_sub_comments = 10,dataset='train',nlp_da
                                     print ('user ' + user.name + ' already scraped')
                                 else:
                                     scrapped_users.append(user.name) #update already scrapped user cache with currently scraped user
-                                    for user_comment in user.get_comments(limit=None,_use_oauth=False):
+                                    for user_comment in cuser.get_comments(limit=None):
                                         if nlp_data == True:
                                             body = user_comment.body.split()
                                             #filter out all but the min of 10 words or the total body word count from the comments body to reduce the dataset size.

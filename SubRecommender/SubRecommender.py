@@ -6,18 +6,7 @@ import json
 import pandas as pd
 import random
 import numpy as np
-
-filtered_top_subs = ['AskReddit', 'pics', 'funny', 'todayilearned', 'gifs', 'gaming',
-       'videos', 'worldnews', 'Showerthoughts', 'news', 'movies',
-       'mildlyinteresting', 'aww', 'IAmA', 'WTF', 'politics',
-       'explainlikeimfive', 'AdviceAnimals', 'Music', 'tifu',
-       'nottheonion', 'Jokes', 'LifeProTips', 'science', 'television',
-       'OldSchoolCool', 'technology', 'space', 'pcmasterrace',
-       'interestingasfuck', 'Futurology', 'food', 'dataisbeautiful',
-       'creepy', 'The_Donald', 'sports', 'woahdude', 'UpliftingNews',
-       'photoshopbattles', 'books', 'gadgets', 'BlackPeopleTwitter',
-       'pokemongo', 'DIY', 'EarthPorn', 'Documentaries',
-       'ImGoingToHellForThis', 'Art', 'cringepics', 'facepalm']
+from boltons.setutils import IndexedSet
 
 def chunks(l, n):
     n = max(1, n)
@@ -48,8 +37,11 @@ class SubRecommender():
         self.batch_size = batch_size
 
     def load_train_df(self):
+        print("Loading Training Data")
         with open(self.train_data_file,'r') as data_file:
             train_data = json.load(data_file)
+        with open("data/user_comment_sequence_cache.json",'r') as cache_file:
+            sequence_cache = json.load(cache_file)
         df = pd.DataFrame(train_data,columns=['user','subreddit','utc_stamp'])
         df['utc_stamp'] = pd.to_datetime(df['utc_stamp'],unit='s')
         df.sort_values(by=['user','utc_stamp'], ascending=True, inplace=True)
@@ -58,20 +50,26 @@ class SubRecommender():
         self.training_sequences = []
         self.training_labels = []
         self.training_seq_lengths = []
-        for usr in users:
-            user_comment_subs = list(df.loc[df['user'] == usr]['subreddit'].values)
+        print("Building Training Sequences")
+        for i,usr in enumerate(users):
+            if i % int(len(users)/10) == 0:
+                print("Sequence Builder " + str(round(i/len(users)*100,0)) + " % Complete")
+            if usr in sequence_cache.keys():
+                user_comment_subs = sequence_cache[usr]
+            else:
+                user_comment_subs = list(df.loc[df['user'] == usr]['subreddit'].values)
+                sequence_cache[usr] = user_comment_subs
             comment_chunks = chunks(user_comment_subs,self.sequence_chunk_size)
             for chnk in comment_chunks:
-                filter_top = [sub for sub in chnk if sub not in filtered_top_subs]
-                if filter_top:
-                    label = sub_list.index(random.choice(filter_top))
-                    self.training_labels.append(label)
-                    chnk_seq = [sub_list.index(sub) for sub in chnk if sub_list.index(sub) != label]
-                    self.training_sequences.append(chnk_seq)  
-                    self.training_seq_lengths.append(len(chnk_seq))
+                label = IndexedSet(chnk)[-1]#Last interacted with subreddit in chunk
+                self.training_labels.append(label)
+                chnk_seq = [sub_list.index(sub) for sub in chnk if sub_list.index(sub) != label]
+                self.training_sequences.append(chnk_seq)  
+                self.training_seq_lengths.append(len(chnk_seq))
         return pd.DataFrame({'sub_seqs':self.training_sequences,'sub_label':self.training_labels,'seq_length':self.training_seq_lengths})
 
     def create_vocab(self,sub_reddits):
+        print("Building Vocab")
         self.vocab = sub_reddits
         self.vocab_size = len(self.vocab)
         self.idx_to_vocab = dict(enumerate(self.vocab))
@@ -86,7 +84,9 @@ class SubRecommender():
     def train_network(self,num_epochs=10):
         train_df = self.load_train_df()
         train,test = self.split_train_test(train_df,0.8)
+        print("Building Graph")
         self.g = rnn.build_graph(vocab=self.vocab,batch_size=self.batch_size)
+        print("Training Network")
         tr_losses, te_losses = rnn.train_graph(self.g,train,test,num_epochs=num_epochs,batch_size=self.batch_size,
                                    save=self.save_model_file)
         return tr_losses,te_losses
