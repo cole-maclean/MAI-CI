@@ -1,3 +1,4 @@
 *.ini
+*.pkl
 SubRecommender/data/
 SubRecommender/models/

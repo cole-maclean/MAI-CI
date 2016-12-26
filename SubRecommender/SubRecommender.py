@@ -7,26 +7,11 @@ import pandas as pd
 import random
 import numpy as np
 from boltons.setutils import IndexedSet
+from tflearn.data_utils import pad_sequences
 
 def chunks(l, n):
     n = max(1, n)
     return (l[i:i+n] for i in range(0, len(l), n))
-
-def build_user_comment_df(sub_cmt_list,chunk_size,batch_size):
-    comment_chunks = chunks(sub_cmt_list,chunk_size)
-    usr_seqs = [chnk for chnk in comment_chunks]
-    padded_seqs = pad_pred_data(usr_seqs,batch_size)
-    df = pd.DataFrame({'sub_seqs':padded_seqs})
-    df['sub_label'] = -1
-    df['seq_length'] = df.apply (lambda row: len(row['sub_seqs']),axis=1)
-    return df
-
-def pad_pred_data(pred_data,batch_size):
-    i = len(pred_data)
-    while i < batch_size:
-        pred_data.append([0])
-        i = i + 1
-    return pred_data
 
 class SubRecommender():
 
@@ -83,7 +68,7 @@ class SubRecommender():
 
     def create_vocab(self,sub_reddits):
         print("Building Vocab")
-        self.vocab = sub_reddits
+        self.vocab = ["Unseen-Sub"] + sub_reddits
         self.vocab_size = len(self.vocab)
         self.idx_to_vocab = dict(enumerate(self.vocab))
         self.vocab_to_idx = dict(zip(self.idx_to_vocab.values(), self.idx_to_vocab.keys()))
@@ -94,18 +79,25 @@ class SubRecommender():
         self.train, self.test = train_df.ix[:train_len-1], train_df.ix[train_len:train_len + test_len]
         return self.train, self.test 
 
-    def train_network(self,num_epochs=10):
+    def train(self):
         if self.training_labels == []:
             train_df = self.load_train_df()
         train,test = self.split_train_test(train_df,0.8)
-        print("Building Graph")
-        self.g = rnn.build_graph(vocab=self.vocab,batch_size=self.batch_size)
-        print("Training Network")
-        tr_losses, te_losses = rnn.train_graph(self.g,train,test,num_epochs=num_epochs,batch_size=self.batch_size,
-                                   save=self.save_model_file)
-        return tr_losses,te_losses
+        self.model = rnn.train_model(train,test,self.vocab_size,self.sequence_chunk_size)
+        return self.model
 
-    def rec_subs(self,sub_cmt_list):
-        user_df = build_user_comment_df(sub_cmt_list,self.sequence_chunk_size,self.batch_size)
-        preds,rec_subs =  rnn.recommend_subs(self.g,self.save_model_file,user_df,self.batch_size)
-        return sorted([(self.idx_to_vocab[sub],preds[i,sub]) for i,sub in enumerate(rec_subs)],key=lambda x: x[1],reverse=True)
+    def recommend_subs(self,user_data):
+        rec_subs = []
+        for usr in user_data:
+            usr_sub_seq = [] #build sequence of non-repeating subreddit interactions
+            for i,sub in enumerate(usr):
+                if i ==0:
+                    usr_sub_seq.append(sub)
+                elif sub != usr[i-1]:#Check that current sub isn't repeated action of previous sub
+                    usr_sub_seq.append(sub)
+            usr_seqs = [[self.vocab_to_idx[sub] if sub in self.vocab else 0 for sub in chnk] for chnk in chunks(usr_sub_seq,self.sequence_chunk_size)]
+            pad_usr_seqs = pad_sequences(usr_seqs, maxlen=self.sequence_chunk_size, value=0.)
+            sub_probs = self.model.predict(pad_usr_seqs)
+            rec_subs.append([self.idx_to_vocab[probs.index(max(probs))] for probs in sub_probs])
+        return rec_subs
+
