@@ -34,6 +34,8 @@ class SubRecommender():
             train_data = json.load(data_file)
         with open("data/user_comment_sequence_cache.json",'r') as cache_file:
             sequence_cache = json.load(cache_file)
+        if self.vocab == []:
+            self.create_vocab()
         df = pd.DataFrame(train_data,columns=['user','subreddit','utc_stamp'])
         df['utc_stamp'] = pd.to_datetime(df['utc_stamp'],unit='s')
         df.sort_values(by=['user','utc_stamp'], ascending=True, inplace=True)

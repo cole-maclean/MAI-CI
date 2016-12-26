@@ -2,12 +2,16 @@ from __future__ import division, print_function, absolute_import
 
 import tflearn
 from tflearn.data_utils import to_categorical, pad_sequences
+from dask import dataframe as dd 
 
-def train_model(train,test,vocab_size,max_seq_size):
-    trainX = train['sub_seqs'].values
-    trainY = train['sub_label'].values
-    testX = test['sub_seqs'].values
-    testY = test['sub_label'].values
+def train_model(train,test,vocab_size,max_seq_size,npartitions=3):
+    dd_train = dd.from_pandas(train, npartitions=npartitions)
+    dd_test =  dd.from_pandas(test, npartitions=npartitions)
+
+    trainX = dd_train['sub_seqs'].compute()
+    trainY = dd_train['sub_label'].compute()
+    testX = dd_test['sub_seqs'].compute()
+    testY = dd_test['sub_label'].compute()
 
     # Sequence padding
     trainX = pad_sequences(trainX, maxlen=max_seq_size, value=0.)
@@ -28,5 +32,5 @@ def train_model(train,test,vocab_size,max_seq_size):
     # Training
     model = tflearn.DNN(net, tensorboard_verbose=0)
     model.fit(trainX, trainY, validation_set=(testX, testY), show_metric=True,
-              batch_size=32)
+              batch_size=256)
     return model
