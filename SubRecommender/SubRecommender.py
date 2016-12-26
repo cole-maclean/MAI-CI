@@ -8,6 +8,7 @@ import random
 import numpy as np
 from boltons.setutils import IndexedSet
 from tflearn.data_utils import pad_sequences
+from collections import Counter
 
 def chunks(l, n):
     n = max(1, n)
@@ -45,6 +46,7 @@ class SubRecommender():
         self.training_seq_lengths = []
         print("Building Training Sequences")
         for i,usr in enumerate(users):
+            user_labels = []
             if i % int(len(users)/10) == 0:
                 print("Sequence Builder " + str(round(i/len(users)*100,0)) + " % Complete")
             if usr in sequence_cache.keys():
@@ -60,12 +62,16 @@ class SubRecommender():
                 sequence_cache[usr] = usr_sub_seq
             comment_chunks = chunks(usr_sub_seq,self.sequence_chunk_size)
             for chnk in comment_chunks:
-                label = self.vocab.index(IndexedSet(chnk)[-1])#Last interacted with subreddit in chunk
-                chnk_seq = [self.vocab.index(sub) for sub in chnk if self.vocab.index(sub) != label] 
-                if len(chnk_seq) > self.min_seq_length:
-                    self.training_sequences.append(chnk_seq)  
-                    self.training_seq_lengths.append(len(chnk_seq))
-                    self.training_labels.append(label)
+                filtered_subs = [self.vocab.index(sub) for sub in chnk if sub not in user_labels]
+                if filtered_subs:
+                    min_prob = min([self.vocab_probs[sub] for sub in filtered_subs])
+                    label = self.vocab_probs.index(min_prob)#Least common sub
+                    user_labels.append(label)
+                    chnk_seq = [self.vocab.index(sub) for sub in chnk if self.vocab.index(sub) != label] 
+                    if len(chnk_seq) > self.min_seq_length:
+                        self.training_sequences.append(chnk_seq)  
+                        self.training_seq_lengths.append(len(chnk_seq))
+                        self.training_labels.append(label)
         with open("data/user_comment_sequence_cache.json",'w') as cache_file:
             json.dump(sequence_cache,cache_file)
         train_df = pd.DataFrame({'sub_seqs':self.training_sequences,'sub_label':self.training_labels,'seq_length':self.training_seq_lengths})
@@ -77,9 +83,10 @@ class SubRecommender():
         with open(self.train_data_file,'r') as data_file:
             train_data = json.load(data_file)
         df = pd.DataFrame(train_data,columns=['user','subreddit','utc_stamp'])
-        df['utc_stamp'] = pd.to_datetime(df['utc_stamp'],unit='s')
-        df.sort_values(by=['user','utc_stamp'], ascending=True, inplace=True)
-        self.vocab = ["Unseen-Sub"] + list(df.groupby('subreddit')['subreddit'].nunique().keys())
+        vocab_counts = Counter(df["subreddit"])
+        total_counts = len(df["subreddit"])
+        self.vocab = ["Unseen-Sub"] + list(vocab_counts.keys())
+        self.vocab_probs = [0] + [cnt/total_counts for cnt in vocab_counts.values()]
         self.vocab_size = len(self.vocab)
         self.idx_to_vocab = dict(enumerate(self.vocab))
         self.vocab_to_idx = dict(zip(self.idx_to_vocab.values(), self.idx_to_vocab.keys()))
