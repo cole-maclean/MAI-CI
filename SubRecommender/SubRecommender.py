@@ -15,18 +15,21 @@ def chunks(l, n):
 
 class SubRecommender():
 
-    def __init__(self, sequence_chunk_size = 51,min_seq_length=5, train_data_file='',batch_size = 256,save_model_file=''):
+    def __init__(self, sequence_chunk_size = 51,min_seq_length=5, train_data_file='',batch_size = 256):
         self.sequence_chunk_size = sequence_chunk_size
         self.train_data_file = train_data_file
-        self.save_model_file = save_model_file
         self.batch_size = batch_size
         self.min_seq_length = min_seq_length
         self.training_sequences = []
         self.training_labels = []
         self.training_seq_lengths = []
+        self.vocab = []
 
-    def load_train_df(self):
+    def load_train_df(self,load_file = ''):
         print("Loading Training Data")
+        if load_file:
+            print ("Data loaded from disk")
+            return pd.read_json(load_file)
         with open(self.train_data_file,'r') as data_file:
             train_data = json.load(data_file)
         with open("data/user_comment_sequence_cache.json",'r') as cache_file:
@@ -35,7 +38,6 @@ class SubRecommender():
         df['utc_stamp'] = pd.to_datetime(df['utc_stamp'],unit='s')
         df.sort_values(by=['user','utc_stamp'], ascending=True, inplace=True)
         users = list(df.groupby('user')['user'].nunique().keys())
-        sub_list = self.create_vocab(list(df.groupby('subreddit')['subreddit'].nunique().keys()))
         self.training_sequences = []
         self.training_labels = []
         self.training_seq_lengths = []
@@ -56,19 +58,26 @@ class SubRecommender():
                 sequence_cache[usr] = usr_sub_seq
             comment_chunks = chunks(usr_sub_seq,self.sequence_chunk_size)
             for chnk in comment_chunks:
-                label = sub_list.index(IndexedSet(chnk)[-1])#Last interacted with subreddit in chunk
-                chnk_seq = [sub_list.index(sub) for sub in chnk if sub_list.index(sub) != label] 
+                label = self.vocab.index(IndexedSet(chnk)[-1])#Last interacted with subreddit in chunk
+                chnk_seq = [self.vocab.index(sub) for sub in chnk if self.vocab.index(sub) != label] 
                 if len(chnk_seq) > self.min_seq_length:
                     self.training_sequences.append(chnk_seq)  
                     self.training_seq_lengths.append(len(chnk_seq))
                     self.training_labels.append(label)
         with open("data/user_comment_sequence_cache.json",'w') as cache_file:
             json.dump(sequence_cache,cache_file)
-        return pd.DataFrame({'sub_seqs':self.training_sequences,'sub_label':self.training_labels,'seq_length':self.training_seq_lengths})
+        train_df = pd.DataFrame({'sub_seqs':self.training_sequences,'sub_label':self.training_labels,'seq_length':self.training_seq_lengths})
+        train_df.to_json("data/" + str(self.vocab_size) + "_" + str(self.sequence_chunk_size) + "_" + str(self.min_seq_length) + "_sequence_data.json")
+        return train_df
 
-    def create_vocab(self,sub_reddits):
+    def create_vocab(self):
         print("Building Vocab")
-        self.vocab = ["Unseen-Sub"] + sub_reddits
+        with open(self.train_data_file,'r') as data_file:
+            train_data = json.load(data_file)
+        df = pd.DataFrame(train_data,columns=['user','subreddit','utc_stamp'])
+        df['utc_stamp'] = pd.to_datetime(df['utc_stamp'],unit='s')
+        df.sort_values(by=['user','utc_stamp'], ascending=True, inplace=True)
+        self.vocab = ["Unseen-Sub"] + list(df.groupby('subreddit')['subreddit'].nunique().keys())
         self.vocab_size = len(self.vocab)
         self.idx_to_vocab = dict(enumerate(self.vocab))
         self.vocab_to_idx = dict(zip(self.idx_to_vocab.values(), self.idx_to_vocab.keys()))
@@ -76,12 +85,16 @@ class SubRecommender():
 
     def split_train_test(self,train_df,split_perc):
         train_len, test_len = np.floor(len(train_df)*split_perc), np.floor(len(train_df)*(1-split_perc))
-        self.train, self.test = train_df.ix[:train_len-1], train_df.ix[train_len:train_len + test_len]
-        return self.train, self.test 
+        train, test = train_df.ix[:train_len-1], train_df.ix[train_len:train_len + test_len]
+        return train, test 
 
-    def train(self):
+    def train(self,load_file=''):
+        if self.vocab == []:
+            self.create_vocab()
         if self.training_labels == []:
-            train_df = self.load_train_df()
+            train_df = self.load_train_df(load_file)
+        else:
+            train_df = pd.DataFrame({'sub_seqs':self.training_sequences,'sub_label':self.training_labels,'seq_length':self.training_seq_lengths})
         train,test = self.split_train_test(train_df,0.8)
         self.model = rnn.train_model(train,test,self.vocab_size,self.sequence_chunk_size)
         return self.model
@@ -100,4 +113,3 @@ class SubRecommender():
             sub_probs = self.model.predict(pad_usr_seqs)
             rec_subs.append([self.idx_to_vocab[probs.index(max(probs))] for probs in sub_probs])
         return rec_subs
-
