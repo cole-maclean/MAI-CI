@@ -52,8 +52,8 @@ def scrape_data(n_scrape_loops = 10,dataset='train',nlp_data=False):
             reddit_data = json.load(data_file)
         with open('data/scrapped_users.json','r') as data_file:    
             scrapped_users = json.load(data_file)
-        try:
-            for scrape_loop in range(n_scrape_loops):
+        for scrape_loop in range(n_scrape_loops):
+            try:
                 all_comments = r.get_comments('all')
                 print ("Scrape Loop " + str(scrape_loop))
                 for cmt in all_comments:
@@ -81,8 +81,8 @@ def scrape_data(n_scrape_loops = 10,dataset='train',nlp_data=False):
                                 else:
                                     reddit_data.append([user.name,user_comment.subreddit.display_name,
                                                   user_comment.created_utc])
-        except Exception as e:
-            print(e)
+            except Exception as e:
+                print(e)
     #dump scrapped dataset to script                   
     with open('data/' + dataset + '_reddit_data' + nlp_flag + '.json','w') as data_file:
         json.dump(reddit_data, data_file)

@@ -4,12 +4,13 @@
 import rnn
 import json
 import pandas as pd
-import random
 import numpy as np
 from boltons.setutils import IndexedSet
 from tflearn.data_utils import pad_sequences
 from joblib import Parallel, delayed
 from operator import itemgetter
+
+np.random.seed(seed=42)
 
 def chunks(l, n):
     n = max(1, n)
@@ -24,7 +25,7 @@ def normalize(lst):
 
 class SubRecommender():
 
-    def __init__(self, sequence_chunk_size = 51,min_seq_length=5, train_data_file='',batch_size = 256,min_count_thresh=10):
+    def __init__(self, train_data_file='',embedding_file='',sequence_chunk_size = 51,min_seq_length=5, batch_size = 256,min_count_thresh=10):
         self.sequence_chunk_size = sequence_chunk_size
         self.train_data_file = train_data_file
         self.batch_size = batch_size
@@ -34,6 +35,7 @@ class SubRecommender():
         self.training_seq_lengths = []
         self.vocab = []
         self.min_count_thresh = min_count_thresh
+        self.embedding_file = embedding_file
 
     def load_train_df(self,load_file = ''):
         print("Loading Training Data")
@@ -59,8 +61,6 @@ class SubRecommender():
         self.training_seq_lengths = []
         print("Building Training Sequences")
         for i,usr in enumerate(users):
-            if i % int(len(users)/10) == 0:
-                print("Sequence Builder " + str(round(i/len(users)*100,0)) + " % Complete")
             if usr in cache_data.keys():
                 usr_sub_seq = cache_data[usr]
             else:
@@ -75,14 +75,13 @@ class SubRecommender():
         with open("data/user_comment_sequence_cache.json",'w') as cache_file:
             json.dump(cache_data,cache_file)
         rslts = Parallel(n_jobs=6)(delayed(self.build_training_sequences)(usr) for usr in cache_data.values())
-        return rslts
-        self.training_sequences = [data[0] for data in rslts]
-        self.training_labels = [data[1] for data in rslts]
-        self.training_seq_lengths = [data[2] for data in rslts]
+        self.training_sequences = [data[0] for seq_chunks in rslts for data in seq_chunks]
+        self.training_labels = [data[1] for seq_chunks in rslts for data in seq_chunks]
+        self.training_seq_lengths = [data[2] for seq_chunks in rslts for data in seq_chunks]
         train_df = pd.DataFrame({'sub_seqs':self.training_sequences,'sub_label':self.training_labels,'seq_length':self.training_seq_lengths})
         cache_df = pd.DataFrame({'sub_seqs':[[self.vocab[vc_indx] for vc_indx in seq] for seq in self.training_sequences],
                                  'sub_label':[self.vocab[vc_indx] for vc_indx in self.training_labels],'seq_length':self.training_seq_lengths})
-        cache_df.to_json("data/" + str(self.vocab_size) + "_" + str(self.sequence_chunk_size) + "_" + str(self.min_seq_length) + "_sequence_data.json")
+        cache_df.to_json("data/training_sequences/" + str(self.vocab_size) + "_" + str(self.sequence_chunk_size) + "_" + str(self.min_seq_length) + "_sequence_data.json")
         return train_df
 
     def build_training_sequences(self,usr_sub_seq):
@@ -108,10 +107,12 @@ class SubRecommender():
         df = pd.DataFrame(train_data,columns=['user','subreddit','utc_stamp'])
         vocab_counts = df["subreddit"].value_counts()
         total_counts = len(df["subreddit"])
-        tmp_vocab = [sub for sub,cnt in vocab_counts.items() if cnt >= self.min_count_thresh]
+        with open(self.embedding_file,'r') as data_file:
+            embeddings = json.load(data_file)
+        tmp_vocab = [sub for sub,cnt in vocab_counts.items() if sub in embeddings.keys() and cnt >= self.min_count_thresh]
         inv_prob = [total_counts/vocab_counts[sub] for sub in tmp_vocab]
+        self.embedding = [[0.0,0.0]] + [embeddings[sub] for sub in tmp_vocab]
         self.vocab = ["Unseen-Sub"] + tmp_vocab
-        total_inv_prob = sum(inv_prob)
         tmp_vocab_probs = normalize(inv_prob)
         self.vocab_probs = [1-sum(tmp_vocab_probs)] + tmp_vocab_probs #force probs sum to 1 by adding differenc to "Unseen-sub" probability
         self.vocab_size = len(self.vocab)
@@ -132,7 +133,8 @@ class SubRecommender():
         else:
             train_df = pd.DataFrame({'sub_seqs':self.training_sequences,'sub_label':self.training_labels,'seq_length':self.training_seq_lengths})
         train,test = self.split_train_test(train_df,0.8)
-        self.model = rnn.train_model(train,test,self.vocab_size,self.sequence_chunk_size,num_epochs=num_epochs)
+        print("Training Model")
+        self.model = rnn.train_model(train,test,self.vocab_size,self.embedding,self.sequence_chunk_size,num_epochs=num_epochs)
         return self.model
 
     def recommend_subs(self,user_data):

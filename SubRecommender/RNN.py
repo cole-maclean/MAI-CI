@@ -4,7 +4,7 @@ import tflearn
 from tflearn.data_utils import to_categorical, pad_sequences
 from dask import dataframe as dd 
 
-def train_model(train,test,vocab_size,max_seq_size,npartitions=3,num_epochs=10):
+def train_model(train,test,vocab_size,embedding,max_seq_size,npartitions=3,num_epochs=10):
     dd_train = dd.from_pandas(train, npartitions=npartitions)
     dd_test =  dd.from_pandas(test, npartitions=npartitions)
 
@@ -23,14 +23,19 @@ def train_model(train,test,vocab_size,max_seq_size,npartitions=3,num_epochs=10):
 
     # Network building
     net = tflearn.input_data([None, max_seq_size])
-    net = tflearn.embedding(net, input_dim=vocab_size, output_dim=128)
-    net = tflearn.lstm(net, 64, dropout=0.8)
+    net = tflearn.embedding(net, input_dim=vocab_size, output_dim=2,trainable=True)
+    net = tflearn.lstm(net, 64, dropout=0.6)
     net = tflearn.fully_connected(net, vocab_size, activation='softmax')
     net = tflearn.regression(net, optimizer='adam', learning_rate=0.001,
-                             loss='categorical_crossentropy')
+                             loss='embedding_euclid_distance')
+
 
     # Training
     model = tflearn.DNN(net, tensorboard_verbose=3)
+    # Retrieve embedding layer weights (only a single weight matrix, so index is 0)
+    embeddingWeights = tflearn.get_layer_variables_by_name('Embedding')[0]
+    # Assign your own weights (for example, a numpy array [input_dim, output_dim])
+    model.set_weights(embeddingWeights, embedding)
     model.fit(trainX, trainY, validation_set=(testX, testY), show_metric=True,
               batch_size=256,n_epoch=num_epochs)
     return model
