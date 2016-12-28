@@ -125,7 +125,7 @@ class SubRecommender():
         train, test = train_df.ix[:train_len-1], train_df.ix[train_len:train_len + test_len]
         return train, test 
 
-    def train(self,load_file='',num_epochs=10):
+    def train(self,load_file='',num_epochs=10,embedding=True):
         if self.vocab == []:
             self.create_vocab()
         if self.training_labels == []:
@@ -134,6 +134,8 @@ class SubRecommender():
             train_df = pd.DataFrame({'sub_seqs':self.training_sequences,'sub_label':self.training_labels,'seq_length':self.training_seq_lengths})
         train,test = self.split_train_test(train_df,0.8)
         print("Training Model")
+        if embedding == False:
+            self.embedding = []
         self.model = rnn.train_model(train,test,self.vocab_size,self.embedding,self.sequence_chunk_size,num_epochs=num_epochs)
         return self.model
 
