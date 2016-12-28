@@ -136,7 +136,7 @@ class SubRecommender():
         print("Training Model")
         if embedding == False:
             self.embedding = []
-        self.model = rnn.train_model(train,test,self.vocab_size,self.embedding,self.sequence_chunk_size,num_epochs=num_epochs)
+        self.model = rnn.train_model(train,test,self.vocab_size,self.sequence_chunk_size,embedding = self.embedding,num_epochs=num_epochs)
         return self.model
 
     def recommend_subs(self,user_data):
