@@ -12,6 +12,57 @@ from operator import itemgetter
 
 np.random.seed(seed=42)
 
+filter_list = ['AskReddit',
+ 'pics',
+ 'funny',
+ 'todayilearned',
+ 'worldnews',
+ 'videos',
+ 'gaming',
+ 'news',
+ 'gifs',
+ 'IAmA',
+ 'movies',
+ 'Showerthoughts',
+ 'politics',
+ 'aww',
+ 'WTF',
+ 'mildlyinteresting',
+ 'AdviceAnimals',
+ 'explainlikeimfive',
+ 'science',
+ 'Music',
+ 'technology',
+ 'television',
+ 'nottheonion',
+ 'LifeProTips',
+ 'OldSchoolCool',
+ 'tifu',
+ 'Jokes',
+ 'Futurology',
+ 'pcmasterrace',
+ 'The_Donald',
+ 'space',
+ 'dataisbeautiful',
+ 'sports',
+ 'books',
+ 'interestingasfuck',
+ 'food',
+ 'creepy',
+ 'pokemongo',
+ 'TwoXChromosomes',
+ 'BlackPeopleTwitter',
+ 'personalfinance',
+ 'atheism',
+ 'UpliftingNews',
+ 'bestof',
+ 'Documentaries',
+ 'Overwatch',
+ 'DIY',
+ 'askscience',
+ 'woahdude',
+ 'TumblrInAction']
+
 def chunks(l, n):
     n = max(1, n)
     return (l[i:i+n] for i in range(0, len(l), n))
@@ -25,7 +76,7 @@ def normalize(lst):
 
 class SubRecommender():
 
-    def __init__(self, train_data_file='',embedding_file='',sequence_chunk_size = 51,min_seq_length=5, batch_size = 256,min_count_thresh=10):
+    def __init__(self, train_data_file='',sequence_chunk_size = 51,min_seq_length=5, batch_size = 256,min_count_thresh=10):
         self.sequence_chunk_size = sequence_chunk_size
         self.train_data_file = train_data_file
         self.batch_size = batch_size
@@ -35,23 +86,22 @@ class SubRecommender():
         self.training_seq_lengths = []
         self.vocab = []
         self.min_count_thresh = min_count_thresh
-        self.embedding_file = embedding_file
 
     def load_train_df(self,load_file = ''):
         print("Loading Training Data")
+        if self.vocab == []:
+            self.create_vocab()
         if load_file:
             print ("Data loaded from disk")
             cache_df = pd.read_json(load_file)
             self.training_sequences = [[self.vocab.index(sub) for sub in seq if sub in self.vocab] for seq in cache_df['sub_seqs']]
-            self.training_labels = [self.vocab.index(sub) for sub in cache_df['sub_label'] if sub in self.vocab]
+            self.training_labels = [self.vocab.index(sub) if sub in self.vocab else 0 for sub in cache_df['sub_label']]
             self.training_seq_lengths = cache_df['seq_length']
             return pd.DataFrame({'sub_seqs':self.training_sequences,'sub_label':self.training_labels,'seq_length':self.training_seq_lengths})
         with open(self.train_data_file,'r') as data_file:
             train_data = json.load(data_file)
         with open("data/user_comment_sequence_cache.json",'r') as cache_file:
             cache_data = json.load(cache_file)
-        if self.vocab == []:
-            self.create_vocab()
         df = pd.DataFrame(train_data,columns=['user','subreddit','utc_stamp'])
         df['utc_stamp'] = pd.to_datetime(df['utc_stamp'],unit='s')
         df.sort_values(by=['user','utc_stamp'], ascending=True, inplace=True)
@@ -88,9 +138,8 @@ class SubRecommender():
         user_labels = []
         train_seqs = []
         comment_chunks = chunks(usr_sub_seq,self.sequence_chunk_size)
-        print("vocab size = " + str(self.vocab_size))
         for chnk in comment_chunks:
-            filtered_subs = [self.vocab.index(sub) for sub in chnk if sub in self.vocab and sub not in user_labels]
+            filtered_subs = [self.vocab.index(sub) for sub in chnk if sub in self.filtered_vocab and self.vocab.index(sub) not in user_labels]
             if filtered_subs:
                 filter_probs = normalize([self.vocab_probs[sub_indx] for sub_indx in filtered_subs])
                 label = np.random.choice(filtered_subs,1,p=filter_probs)[0]
@@ -105,14 +154,12 @@ class SubRecommender():
         with open(self.train_data_file,'r') as data_file:
             train_data = json.load(data_file)
         df = pd.DataFrame(train_data,columns=['user','subreddit','utc_stamp'])
-        vocab_counts = df["subreddit"].value_counts()
-        total_counts = len(df["subreddit"])
-        with open(self.embedding_file,'r') as data_file:
-            embeddings = json.load(data_file)
-        tmp_vocab = [sub for sub,cnt in vocab_counts.items() if sub in embeddings.keys() and cnt >= self.min_count_thresh]
-        inv_prob = [total_counts/vocab_counts[sub] for sub in tmp_vocab]
-        self.embedding = [[0.0,0.0]] + [embeddings[sub] for sub in tmp_vocab]
+        self.vocab_counts = df["subreddit"].value_counts()
+        tmp_vocab = [sub for sub,cnt in self.vocab_counts.items() if cnt >= self.min_count_thresh]
+        total_counts = sum([self.vocab_counts[sub] for sub in tmp_vocab])
+        inv_prob = [total_counts/self.vocab_counts[sub] for sub in tmp_vocab]
         self.vocab = ["Unseen-Sub"] + tmp_vocab
+        self.filtered_vocab = [sub for sub in self.vocab if sub not in filter_list]
         tmp_vocab_probs = normalize(inv_prob)
         self.vocab_probs = [1-sum(tmp_vocab_probs)] + tmp_vocab_probs #force probs sum to 1 by adding differenc to "Unseen-sub" probability
         self.vocab_size = len(self.vocab)
@@ -125,7 +172,7 @@ class SubRecommender():
         train, test = train_df.ix[:train_len-1], train_df.ix[train_len:train_len + test_len]
         return train, test 
 
-    def train(self,load_file='',num_epochs=10,embedding=True):
+    def train(self,load_file='',num_epochs=10,npartitions=6):
         if self.vocab == []:
             self.create_vocab()
         if self.training_labels == []:
@@ -134,9 +181,7 @@ class SubRecommender():
             train_df = pd.DataFrame({'sub_seqs':self.training_sequences,'sub_label':self.training_labels,'seq_length':self.training_seq_lengths})
         train,test = self.split_train_test(train_df,0.8)
         print("Training Model")
-        if embedding == False:
-            self.embedding = []
-        self.model = rnn.train_model(train,test,self.vocab_size,self.sequence_chunk_size,embedding = self.embedding,num_epochs=num_epochs)
+        self.model = rnn.train_model(train,test,self.vocab_size,self.sequence_chunk_size,num_epochs=num_epochs,npartitions=npartitions)
         return self.model
 
     def recommend_subs(self,user_data):
