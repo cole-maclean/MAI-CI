@@ -33,7 +33,7 @@ def train_model(train,test,vocab_size,max_seq_size,npartitions=6,num_epochs=10):
                              loss='categorical_crossentropy')
 
     # Training
-    model = tflearn.DNN(net, tensorboard_verbose=3)
+    model = tflearn.DNN(net,tensorboard_dir='/tmp/tflearn_logs/', tensorboard_verbose=3)
 
     model.fit(trainX, trainY, validation_set=(testX, testY), show_metric=True,
               batch_size=256,n_epoch=num_epochs)
