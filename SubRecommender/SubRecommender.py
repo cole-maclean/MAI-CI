@@ -133,34 +133,33 @@ class SubRecommender():
             return pd.DataFrame({'sub_seqs':self.training_sequences,'sub_label':self.training_labels,'seq_length':self.training_seq_lengths})
         #open the provided data file and user sequence cache
         with open(self.train_data_file,'r') as data_file:
-            train_data = json.load(data_file)
-        with open("data/user_comment_sequence_cache.json",'r') as cache_file:
+            train_data = sorted(json.load(data_file),key=lambda x: (x[0], x[2])) #Sort by user then by utc time stamp
+        with open("data/test_user_comment_sequence_cache.json",'r') as cache_file:
             cache_data = json.load(cache_file)
-        #build pandas dataframe for datamanging tasks
-        df = pd.DataFrame(train_data,columns=['user','subreddit','utc_stamp'])
-        df.set_index(['user','utc_stamp'])
-        df['utc_stamp'] = pd.to_datetime(df['utc_stamp'],unit='s')#convert utc timestamps to date objects
-        df.sort_values(by=['user','utc_stamp'], ascending=True, inplace=True)#sort comments by ascending timestamp
-        users = list(df.groupby('user')['user'].nunique().keys())
+
         self.training_sequences = []
         self.training_labels = []
         self.training_seq_lengths = []
         print("Building Training Sequences")
-        #This loop iterates over all of the users in the dataset to build their unique subreddit sequences, which are loaded from the cache is user exists
-        for i,usr in enumerate(users):
-            if usr in cache_data.keys():
-                usr_sub_seq = cache_data[usr]
-            else:
-                user_comment_subs = list(df.ix[df['user'] == usr]['subreddit'].values)
-                usr_sub_seq = [] #build sequence of non-repeating subreddit interactions
-                for i,sub in enumerate(user_comment_subs):
-                    if i ==0:
-                        usr_sub_seq.append(sub)
-                    elif sub != user_comment_subs[i-1]:#Check that current sub isn't repeated action of previous sub
-                        usr_sub_seq.append(sub)
-            cache_data[usr] = usr_sub_seq
+        #This loop iterates over all of the users in the dataset to build their unique subreddit sequences, which are loaded from the cache if user exists
+        prev_usr = None
+        for comment_data in train_data:
+            current_usr = comment_data[0]
+            if current_usr != prev_usr:#New user found in sorted comment data, begin sequence extraction for new user
+                if prev_usr != None and prev_usr not in cache_data.keys():#dump sequences to cache for previous user if not in cache
+                    cache_data[prev_usr] = usr_sub_seq
+                if current_usr in cache_data.keys():
+                    usr_sub_seq = cache_data[current_usr]
+                else:
+                    usr_sub_seq = [comment_data[1]] #initialize user sub sequence list with first sub for current user
+                    past_sub = comment_data[1]
+            else:#if still iterating through the same user, add new sub to sequence if not a repeat
+                if comment_data[1] != past_sub:#Check that next sub comment is not a repeat of the last interacted with sub, filtering out repeated interactions
+                    usr_sub_seq.append(comment_data[1])
+                    past_sub = comment_data[1]
+            prev_usr = current_usr #update previous user to being the current one before looping to next comment
         #dump the cache for newly sequenced users
-        with open("data/user_comment_sequence_cache.json",'w') as cache_file:
+        with open("data/test_user_comment_sequence_cache.json",'w') as cache_file:
             json.dump(cache_data,cache_file)
         #parallelized routine for building user sequence training data based on classes data munging parameters
         rslts = Parallel(n_jobs=6)(delayed(self.build_training_sequences)(usr) for usr in cache_data.values())

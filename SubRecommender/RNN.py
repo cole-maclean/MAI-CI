@@ -26,8 +26,8 @@ def train_model(train,test,vocab_size,max_seq_size,npartitions=6,num_epochs=10):
     # Network building
     net = tflearn.input_data([None, max_seq_size])
     net = tflearn.embedding(net, input_dim=vocab_size, output_dim=128,trainable=True)
-    net = tflearn.lstm(net, n_units=256, dropout=0.6,weights_init=tflearn.initializations.xavier(),forget_bias=1.0,return_seq=True)
-    net = tflearn.lstm(net, 256, dropout=0.6,weights_init=tflearn.initializations.xavier(),forget_bias=1.0)
+    net = tflearn.lstm(net, n_units=256, dropout=0.5,weights_init=tflearn.initializations.xavier(),forget_bias=1.0,return_seq=True)
+    net = tflearn.lstm(net, 256, dropout=0.5,weights_init=tflearn.initializations.xavier(),forget_bias=1.0)
     net = tflearn.fully_connected(net, vocab_size, activation='softmax',weights_init=tflearn.initializations.xavier())
     net = tflearn.regression(net, optimizer='adam', learning_rate=0.0005,
                              loss='categorical_crossentropy')
