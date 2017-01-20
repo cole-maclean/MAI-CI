@@ -6,60 +6,10 @@ from boltons.setutils import IndexedSet
 from tflearn.data_utils import pad_sequences
 from joblib import Parallel, delayed
 from operator import itemgetter
+import random
 
 np.random.seed(seed=42)
 
-#List of top represented subreddits to filter out as training labels to avoid overbalancing training set in always recommended one of these ubiquitous subreddits
-filter_list = ['AskReddit',
- 'pics',
- 'funny',
- 'todayilearned',
- 'worldnews',
- 'videos',
- 'gaming',
- 'news',
- 'gifs',
- 'IAmA',
- 'movies',
- 'Showerthoughts',
- 'politics',
- 'aww',
- 'WTF',
- 'mildlyinteresting',
- 'AdviceAnimals',
- 'explainlikeimfive',
- 'science',
- 'Music',
- 'technology',
- 'television',
- 'nottheonion',
- 'LifeProTips',
- 'OldSchoolCool',
- 'tifu',
- 'Jokes',
- 'Futurology',
- 'pcmasterrace',
- 'The_Donald',
- 'space',
- 'dataisbeautiful',
- 'sports',
- 'books',
- 'interestingasfuck',
- 'food',
- 'creepy',
- 'pokemongo',
- 'TwoXChromosomes',
- 'BlackPeopleTwitter',
- 'personalfinance',
- 'atheism',
- 'UpliftingNews',
- 'bestof',
- 'Documentaries',
- 'Overwatch',
- 'DIY',
- 'askscience',
- 'woahdude',
- 'TumblrInAction']
 
 def chunks(l, n):
     n = max(1, n)
@@ -87,13 +37,16 @@ class SubRecommender():
 
     min_seq_length - the minimum user subreddit sequence length to be included as a training sequence
 
+    max_popularity - the maximum representation a single sub can have in the corpus (ie the comment count for a subreddit/total comments <= max_popularity)
+                     this filters out the most popular, over represented subreddits
+
     min_count_thresh - used for developing the vocabulary, this represents the minimum count of user interactions that need to exist
     for a subreddit to be included in the vocabulary. If a sub has 50 example user interactions in the supplied dataset, but min_count_thresh 
     is 100, the subreddit is not included in the vocab and filtered out of the training data.
 
     """
 
-    def __init__(self, train_data_file='',sequence_chunk_size = 50,min_seq_length=5,min_count_thresh=10):
+    def __init__(self, train_data_file='',sequence_chunk_size = 50,min_seq_length=5,min_count_thresh=10,max_popularity=0.001):
         self.sequence_chunk_size = sequence_chunk_size
         self.train_data_file = train_data_file
         self.min_seq_length = min_seq_length
@@ -102,8 +55,9 @@ class SubRecommender():
         self.training_seq_lengths = []
         self.vocab = []
         self.min_count_thresh = min_count_thresh
+        self.max_popularity = max_popularity
 
-    def load_train_df(self,load_file = ''):
+    def load_train_df(self,load_file = '',sequence_new_users=False):
         """This routine builds or loads a pandas dataframe of columns:
         sub_seq - the chunked sequences of users subreddit interactions 
         sub_label - the extracted subreddit label for each sequence of user subreddit sequences sub_seq
@@ -134,32 +88,34 @@ class SubRecommender():
         #open the provided data file and user sequence cache
         with open(self.train_data_file,'r') as data_file:
             train_data = sorted(json.load(data_file),key=lambda x: (x[0], x[2])) #Sort by user then by utc time stamp
-        with open("data/test_user_comment_sequence_cache.json",'r') as cache_file:
+        with open("data/user_comment_sequence_cache.json",'r') as cache_file:
             cache_data = json.load(cache_file)
 
         self.training_sequences = []
         self.training_labels = []
         self.training_seq_lengths = []
         print("Building Training Sequences")
-        #This loop iterates over all of the users in the dataset to build their unique subreddit sequences, which are loaded from the cache if user exists
-        prev_usr = None
-        for comment_data in train_data:
-            current_usr = comment_data[0]
-            if current_usr != prev_usr:#New user found in sorted comment data, begin sequence extraction for new user
-                if prev_usr != None and prev_usr not in cache_data.keys():#dump sequences to cache for previous user if not in cache
-                    cache_data[prev_usr] = usr_sub_seq
-                if current_usr in cache_data.keys():
-                    usr_sub_seq = cache_data[current_usr]
-                else:
+        
+        #update sequence cache by scanning through comment dataset and building sequences for user not currently in cache
+        if sequence_new_users:
+            #This loop iterates over all of the users in the dataset to build their unique subreddit sequences, which are loaded from the cache if user exists
+            prev_usr = None
+            past_sub = None
+            for comment_data in train_data:
+                current_usr = comment_data[0]
+                if current_usr != prev_usr:#New user found in sorted comment data, begin sequence extraction for new user
+                    if prev_usr != None and prev_usr not in cache_data.keys():#dump sequences to cache for previous user if not in cache
+                        cache_data[prev_usr] = usr_sub_seq
                     usr_sub_seq = [comment_data[1]] #initialize user sub sequence list with first sub for current user
                     past_sub = comment_data[1]
-            else:#if still iterating through the same user, add new sub to sequence if not a repeat
-                if comment_data[1] != past_sub:#Check that next sub comment is not a repeat of the last interacted with sub, filtering out repeated interactions
-                    usr_sub_seq.append(comment_data[1])
-                    past_sub = comment_data[1]
-            prev_usr = current_usr #update previous user to being the current one before looping to next comment
+                else:#if still iterating through the same user, add new sub to sequence if not a repeat
+                    if comment_data[1] != past_sub:#Check that next sub comment is not a repeat of the last interacted with sub, filtering out repeated interactions
+                        usr_sub_seq.append(comment_data[1])
+                        past_sub = comment_data[1]
+                prev_usr = current_usr #update previous user to being the current one before looping to next comment
+        train_data = None#free up train_data memory
         #dump the cache for newly sequenced users
-        with open("data/test_user_comment_sequence_cache.json",'w') as cache_file:
+        with open("data/user_comment_sequence_cache.json",'w') as cache_file:
             json.dump(cache_data,cache_file)
         #parallelized routine for building user sequence training data based on classes data munging parameters
         rslts = Parallel(n_jobs=6)(delayed(self.build_training_sequences)(usr) for usr in cache_data.values())
@@ -175,18 +131,16 @@ class SubRecommender():
         return train_df
 
     def build_training_sequences(self,usr_sub_seq):
-        user_labels = []
         train_seqs = []
         #split user sub sequences into provided chunks of size sequence_chunk_size
         comment_chunks = chunks(usr_sub_seq,self.sequence_chunk_size)
         for chnk in comment_chunks:
-            #for each chunk, filter out potential labels to select as training label, filter by the top subs filter list and any already utilized labels for this user
-            filtered_subs = [self.vocab.index(sub) for sub in chnk if sub in self.filtered_vocab and self.vocab.index(sub) not in user_labels]
+            #for each chunk, filter out potential labels to select as training label, filter by the top subs filter list
+            filtered_subs = [self.vocab.index(sub) for sub in chnk if sub in self.filtered_vocab and self.vocab.index(sub)]
             if filtered_subs:
                 #randomly select the label from filtered subs, using the vocab probability distribution to smooth out representation of subreddit labels
                 filter_probs = normalize([self.vocab_probs[sub_indx] for sub_indx in filtered_subs])
                 label = np.random.choice(filtered_subs,1,p=filter_probs)[0]
-                user_labels.append(label)
                 #build sequence by ensuring users sub exists in models vocabulary and filtering out the selected label for this subreddit sequence
                 chnk_seq = [self.vocab.index(sub) for sub in chnk if sub in self.vocab and self.vocab.index(sub) != label] 
                 if len(chnk_seq) > self.min_seq_length:#ensure resulting sequence length exeeds min_count_thresh
@@ -194,20 +148,22 @@ class SubRecommender():
         return train_seqs
 
     def create_vocab(self):
-        """This routine develops the models vocabulary using the supplied training data file and the filter list and min_count_thresh 
+        """This routine develops the models vocabulary using the supplied training data file and min_count_thresh and max_popularity
         parameters to filter out subs not meeting these requirements. The vocab_probs is also built, representing the inverse probability 
-        of encounter a paticular subreddit in the given dataset, which is the used to bias the selection of rarer subreddits as labels to 
+        of encounting a paticular subreddit in the given dataset, which is then used to bias the selection of rarer subreddits as labels to 
         smooth the distribution of training labels across all subreddits in the vocabulary"""
         print("Building Vocab")
         with open(self.train_data_file,'r') as data_file:
             train_data = json.load(data_file)
         df = pd.DataFrame(train_data,columns=['user','subreddit','utc_stamp'])
+        train_data = None#free up train_data memory
         self.vocab_counts = df["subreddit"].value_counts()
         tmp_vocab = [sub for sub,cnt in self.vocab_counts.items() if cnt >= self.min_count_thresh]
         total_counts = sum([self.vocab_counts[sub] for sub in tmp_vocab])
         inv_prob = [total_counts/self.vocab_counts[sub] for sub in tmp_vocab]
+        #build filter list of subs with representation <= max_popularity to filter out the over represented and common subs from becoming sequence labels
+        self.filtered_vocab = [sub for sub in tmp_vocab if self.vocab_counts[sub]/total_counts <= self.max_popularity]
         self.vocab = ["Unseen-Sub"] + tmp_vocab
-        self.filtered_vocab = [sub for sub in self.vocab if sub not in filter_list]
         tmp_vocab_probs = normalize(inv_prob)
         self.vocab_probs = [1-sum(tmp_vocab_probs)] + tmp_vocab_probs #force probs sum to 1 by adding differenc to "Unseen-sub" probability
         self.vocab_size = len(self.vocab)
@@ -220,14 +176,30 @@ class SubRecommender():
         train, test = train_df.ix[:train_len-1], train_df.ix[train_len:train_len + test_len]
         return train, test 
 
-    def train(self,load_file='',num_epochs=10,npartitions=6):
+    def train(self,load_file='',num_epochs=10,chunks=1000,learning_rate=0.001,n_units=256,dropout=0.5):
         if self.vocab == []:
             self.create_vocab()
         if self.training_labels == []:
             train_df = self.load_train_df(load_file)
         else:
             train_df = pd.DataFrame({'sub_seqs':self.training_sequences,'sub_label':self.training_labels,'seq_length':self.training_seq_lengths})
-        train,test = self.split_train_test(train_df,0.8)
-        print("Training Model")
-        self.model = rnn.train_model(train,test,self.vocab_size,self.sequence_chunk_size,num_epochs=num_epochs,npartitions=npartitions)
+        train,test = self.split_train_test(train_df,0.85)
+        print("Training Model with learning_rate = " + str(learning_rate) + " n_units = " + str(n_units) + " dropout = " +str(dropout)) 
+        self.model = rnn.train_model(train,test,self.vocab_size,self.sequence_chunk_size,num_epochs=num_epochs,chunks=chunks,
+                                        learning_rate=learning_rate,n_units=n_units,dropout=dropout)
         return self.model
+
+def model_tuning(iterations,train_sequence_file=''):
+    tuning_model = SubRecommender('data/train_reddit_data.json',
+                                    sequence_chunk_size=15,min_seq_length=7,min_count_thresh=250,max_popularity=0.00075)
+    tuning_model.load_train_df(load_file=train_sequence_file)
+    for i in range(iterations):
+        learning_rate = random.uniform(0.0001,0.001)
+        n_units = random.choice([128,256,512])
+        dropout = random.uniform(0.2,0.95)
+        tuning_model.train(num_epochs=10,chunks=2048,
+                  learning_rate=round(learning_rate,5),n_units=n_units,dropout=round(dropout,2))
+        tuning_model.model = None
+
+if __name__ == "__main__":
+    model_tuning(10)
