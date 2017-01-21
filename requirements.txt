@@ -1,0 +1,9 @@
+boltons==16.5.1
+dask==0.13.0
+joblib==0.10.3
+nltk==3.2.1
+numpy==1.11.0
+pandas==0.18.1
+praw==3.5.0
+tensorflow==0.8.0
+tflearn==0.2.1
