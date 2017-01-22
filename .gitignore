@@ -1,5 +1,4 @@
 *.ini
 *.pkl
-SubRecommender/data/
-SubRecommender/models/
+*.json
 Final Exam/
