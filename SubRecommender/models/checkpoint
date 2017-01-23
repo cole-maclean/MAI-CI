@@ -1,0 +1,2 @@
+model_checkpoint_path: "C:\\Users\\macle\\Desktop\\UPC Masters\\Semester 2\\CI\\SubRecommender\\models\\final_model.tfl"
+all_model_checkpoint_paths: "C:\\Users\\macle\\Desktop\\UPC Masters\\Semester 2\\CI\\SubRecommender\\models\\final_model.tfl"
