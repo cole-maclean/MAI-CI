@@ -6,12 +6,12 @@ Recurrent Neural Network architecture.
 Training data can be generated using the reddit_scrapper.py script. Note - a configuration file with reddit API keys will be required. The file needs to be placed in the 
 SUbRecommender folder and consits of:
 
-[reddit]
-api_key: key
-client_id: id
-client_api_key: client key
-redirect_url: redir url
-user_agent: subreddit-recommender by /u/upcmaici v 0.0.1 
+[reddit]  
+api_key: key  
+client_id: id  
+client_api_key: client key  
+redirect_url: redir url  
+user_agent: subreddit-recommender by /u/upcmaici v 0.0.1   
 
 Data is saved under the SubRecommender folder with the following tree structure (some folders may need to be created):
 
