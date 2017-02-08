@@ -54,7 +54,7 @@ class Recommender():
         client_secret = config.get('reddit', 'client_api_key')
 
         r = praw.Reddit(user_agent=reddit_user_agent,client_id = client_id,client_secret=client_secret) #initialize the praw Reddit object
-        praw_user = r.get_redditor(user)
+        praw_user = r.redditor(user)
         user_data = [(user_comment.subreddit.display_name,
                       user_comment.created_utc) for user_comment in praw_user.get_comments(limit=None)]
         return sorted(user_data,key=lambda x: x[1]) #sort by ascending utc timestamp

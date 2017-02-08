@@ -13,6 +13,7 @@
         user = <input type="text" name="user" value="{{user}}">
         <input type="submit" value="Submit">
     </form>
+    Loading user data may take up to a minute to process
     <h3>Recommended Subreddits:</h3>
     {% for rec in recommendations %}
       <a href={{ "https://www.reddit.com/r/" + rec }}>{{rec}}</a>
