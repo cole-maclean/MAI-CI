@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Subreddit Recommender</title>
+
+<html>
+  <head>
+    <link rel="stylesheet" href="http://cdn.pydata.org/bokeh/release/bokeh-0.12.4.min.css" type="text/css" />
+    <script type="text/javascript" src="http://cdn.pydata.org/bokeh/release/bokeh-0.12.4.min.js"></script>
+    {{ script | safe }}
+  </head>
+  <body>
+    <form action="/recommend">
+        user = <input type="text" name="user" value="{{user}}">
+        <input type="submit" value="Submit">
+    </form>
+    <div class=page>
+      {{ div | safe }}
+    </div>
+  </body>
+</html>

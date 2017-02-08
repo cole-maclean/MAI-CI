@@ -188,6 +188,7 @@ class SubRecommender():
         self.model = rnn.train_model(train,test,self.vocab_size,self.sequence_chunk_size,num_epochs=num_epochs,chunks=chunks,
                                         learning_rate=learning_rate,n_units=n_units,dropout=dropout)
         return self.model
+    
 
 def model_tuning(iterations,train_sequence_file=''):
     tuning_model = SubRecommender('data/train_reddit_data.json',
