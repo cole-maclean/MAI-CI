@@ -68,7 +68,7 @@ class Recommender():
                 non_repeating_subs.append(sub)
             elif sub != user_sub_seq[i-1]:
                 non_repeating_subs.append(sub)
-        self.user_subs = set([self.labels[sub_index] for sub_index in non_repeating_subs)
+        self.user_subs = set([self.labels[sub_index] for sub_index in non_repeating_subs])
         sub_chunks = list(chunks(non_repeating_subs,chunk_size))
         X = pad_sequences(sub_chunks, maxlen=chunk_size, value=0.,padding='post')
         if self.model == None:
