@@ -72,6 +72,7 @@ class Recommender():
         sub_chunks = list(chunks(non_repeating_subs,chunk_size))
         X = pad_sequences(sub_chunks, maxlen=chunk_size, value=0.,padding='post')
         if self.model == None:
+            print("loading model")
             self.model = self.load_model()
         sub_probs = self.model.predict(X)
         recs = [probs.index(max(probs)) for probs in sub_probs]
