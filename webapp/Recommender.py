@@ -32,7 +32,7 @@ class Recommender():
         net = tflearn.regression(net, optimizer='adam', learning_rate=0.0008,
                          loss='categorical_crossentropy')
         model = tflearn.DNN(net)
-        model.load("model/final_model.tfl")
+        model.load("model/final_model.tfl",weights_only=True)
         return model
 
     def load_labels(self):
