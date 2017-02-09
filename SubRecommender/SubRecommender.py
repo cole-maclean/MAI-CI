@@ -183,7 +183,7 @@ class SubRecommender():
             train_df = self.load_train_df(load_file)
         else:
             train_df = pd.DataFrame({'sub_seqs':self.training_sequences,'sub_label':self.training_labels,'seq_length':self.training_seq_lengths})
-        train,test = self.split_train_test(train_df,0.85)
+        train,test = self.split_train_test(train_df,0.99)
         print("Training Model with learning_rate = " + str(learning_rate) + " n_units = " + str(n_units) + " dropout = " +str(dropout)) 
         self.model = rnn.train_model(train,test,self.vocab_size,self.sequence_chunk_size,num_epochs=num_epochs,chunks=chunks,
                                         learning_rate=learning_rate,n_units=n_units,dropout=dropout)

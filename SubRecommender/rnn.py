@@ -6,7 +6,6 @@ import tflearn
 from tflearn.data_utils import to_categorical, pad_sequences
 import dask.array as da
 import numpy as np
-from tflearn.layers.recurrent import bidirectional_rnn,GRUCell
 
 def train_model(train,test,vocab_size,max_seq_size,chunks=1024,num_epochs=10,learning_rate=0.001,n_units=256,dropout=0.5):
 
@@ -31,16 +30,13 @@ def train_model(train,test,vocab_size,max_seq_size,chunks=1024,num_epochs=10,lea
     # Network building
     net = tflearn.input_data([None, max_seq_size])
     net = tflearn.embedding(net, input_dim=vocab_size, output_dim=128,trainable=True)
-    net = bidirectional_rnn(net, GRUCell(128), GRUCell(128),return_seq=True)
-    net = tflearn.dropout(net, dropout)
-    net = bidirectional_rnn(net, GRUCell(128), GRUCell(128),return_seq=False)
-    net = tflearn.dropout(net, dropout)
+    net = tflearn.gru(net, n_units=n_units, dropout=dropout,weights_init=tflearn.initializations.xavier(),return_seq=False)
     net = tflearn.fully_connected(net, vocab_size, activation='softmax',weights_init=tflearn.initializations.xavier())
     net = tflearn.regression(net, optimizer='adam', learning_rate=learning_rate,
                              loss='categorical_crossentropy')
 
     # Training
-    model = tflearn.DNN(net,tensorboard_dir='/tmp/tflearn_logs/deep_gru/', tensorboard_verbose=2)
+    model = tflearn.DNN(net,tensorboard_dir='/tmp/tflearn_logs/shallow_gru/', tensorboard_verbose=2)
                         #checkpoint_path='/tmp/tflearn_logs/shallow_lstm/',
                         #best_checkpoint_path="C:/Users/macle/Desktop/UPC Masters/Semester 2/CI/SubRecommender/models/")
 

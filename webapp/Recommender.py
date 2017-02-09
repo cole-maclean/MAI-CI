@@ -24,15 +24,12 @@ class Recommender():
     def load_model(self):
         net = tflearn.input_data([None, 15])
         net = tflearn.embedding(net, input_dim=5027, output_dim=128,trainable=True)
-        net = bidirectional_rnn(net, GRUCell(128), GRUCell(128),return_seq=True)
-        net = tflearn.dropout(net, 0.23)
-        net = bidirectional_rnn(net, GRUCell(128), GRUCell(128),return_seq=False)
-        net = tflearn.dropout(net, 0.23)
+        net = tflearn.gru(net, n_units=128, dropout=0.6,weights_init=tflearn.initializations.xavier(),return_seq=False)
         net = tflearn.fully_connected(net, 5027, activation='softmax',weights_init=tflearn.initializations.xavier())
-        net = tflearn.regression(net, optimizer='adam', learning_rate=0.0008,
-                         loss='categorical_crossentropy')
+        net = tflearn.regression(net, optimizer='adam', learning_rate=0.00093,
+                                 loss='categorical_crossentropy')
         model = tflearn.DNN(net)
-        model.load("model/final_model.tfl",weights_only=True)
+        model.load("model/shallow_gru.tfl",weights_only=True)
         return model
 
     def load_labels(self):
