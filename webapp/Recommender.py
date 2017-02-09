@@ -8,8 +8,6 @@ import praw
 import configparser
 from collections import Counter
 
-
-
 def chunks(l, n):
     n = max(1, n)
     return (l[i:i+n] for i in range(0, len(l), n))
@@ -19,18 +17,33 @@ class Recommender():
     def __init__(self):
         self.embedding_weights = np.load('model/lowDWeights.npy')
         self.labels = self.load_labels()
-        self.model=None
+        self.graph=None
+        self.session=None
 
-    def load_model(self):
-        net = tflearn.input_data([None, 15])
-        net = tflearn.embedding(net, input_dim=5027, output_dim=128,trainable=True)
-        net = tflearn.gru(net, n_units=128, dropout=0.6,weights_init=tflearn.initializations.xavier(),return_seq=False)
-        net = tflearn.fully_connected(net, 5027, activation='softmax',weights_init=tflearn.initializations.xavier())
-        net = tflearn.regression(net, optimizer='adam', learning_rate=0.00093,
-                                 loss='categorical_crossentropy')
-        model = tflearn.DNN(net)
-        model.load("model/shallow_gru.tfl",weights_only=True)
-        return model
+    def load_graph(self):
+        # We load the protobuf file from the disk and parse it to retrieve the 
+        # unserialized graph_def
+        with tf.gfile.GFile("model/frozen_model.pb", "rb") as f:
+            graph_def = tf.GraphDef()
+            graph_def.ParseFromString(f.read())
+
+        # Then, we can use again a convenient built-in function to import a graph_def into the 
+        # current default Graph
+        with tf.Graph().as_default() as graph:
+            tf.import_graph_def(
+                graph_def, 
+                input_map=None, 
+                return_elements=None, 
+                name="prefix", 
+                op_dict=None, 
+                producer_op_list=None
+            )
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.2)
+        sess_config = tf.ConfigProto(gpu_options=gpu_options)
+        self.session = tf.Session(graph=graph)
+        self.input_tensor = graph.get_tensor_by_name('prefix/InputData/X:0')
+        self.output_tensor = graph.get_tensor_by_name("prefix/FullyConnected/Softmax:0")
+        return graph
 
     def load_labels(self):
         labels = []
@@ -68,11 +81,13 @@ class Recommender():
         self.user_subs = set([self.labels[sub_index] for sub_index in non_repeating_subs])
         sub_chunks = list(chunks(non_repeating_subs,chunk_size))
         X = pad_sequences(sub_chunks, maxlen=chunk_size, value=0.,padding='post')
-        if self.model == None:
+        if self.graph == None:
             print("loading model")
-            self.model = self.load_model()
-        sub_probs = self.model.predict(X)
-        recs = [probs.index(max(probs)) for probs in sub_probs]
+            self.model = self.load_graph()
+        sub_probs = self.session.run(self.output_tensor, feed_dict={
+            self.input_tensor: X
+        })
+        recs = [np.argmax(probs) for probs in sub_probs]
         filtered_recs = [filt_rec for filt_rec in recs if filt_rec not in user_sub_seq]
         top_x_recs,cnt = zip(*Counter(filtered_recs).most_common(n_recs))
         sub_recs = [self.labels[sub_index] for sub_index in top_x_recs]

@@ -12,6 +12,8 @@ app = flask.Flask(__name__)
 
 rec = Recommender()
 
+
+
 @app.route("/")
 def index():   
     sparse_labels = [lbl if random.random() <=0.01 else '' for lbl in rec.labels]
@@ -29,7 +31,7 @@ def index():
     p = figure(tools=TOOLS)
 
     p.scatter("x", "y", radius=0.1, fill_alpha=0.6,
-              fill_color="#ffffd9",
+              fill_color="#c7e9b4",
               line_color=None,source=source)
 
     labels = LabelSet(x="x", y="y", text="sparse_labels", y_offset=8,
@@ -51,7 +53,7 @@ def recommend():
         elif label in rec.user_subs:
             colors.append("#7fcdbb")
         else:
-            colors.append("#ffffd9")
+            colors.append("#c7e9b4")
 
     sparse_labels = [lbl if lbl in recommendations or lbl in rec.user_subs else '' for lbl in rec.labels]
     source = ColumnDataSource({'x':rec.embedding_weights[:,0],'y':rec.embedding_weights[:,1],'labels':rec.labels,'sparse_labels':sparse_labels,'colors':colors})
@@ -88,7 +90,7 @@ if __name__ == "__main__":
     #os.system("open http://localhost:{0}/".format(port))
 
     # Set up the development server on port 8000.
-    app.debug = False
+    app.debug = True
     app.run()
 
 
