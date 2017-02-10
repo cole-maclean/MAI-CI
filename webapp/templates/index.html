@@ -7,8 +7,10 @@
     <link rel="stylesheet" href="http://cdn.pydata.org/bokeh/release/bokeh-0.12.4.min.css" type="text/css" />
     <script type="text/javascript" src="http://cdn.pydata.org/bokeh/release/bokeh-0.12.4.min.js"></script>
     {{ script | safe }}
+
   </head>
   <body>
+    <a href="http://cole-maclean.github.io/blog/RNN-Based-Subreddit-Recommender-System/">The Build</a>
     <form action="/recommend">
         user = <input type="text" name="user" value="{{user}}">
         <input type="submit" value="Submit">
@@ -18,4 +20,5 @@
       {{ div | safe }}
     </div>
   </body>
+    
 </html>

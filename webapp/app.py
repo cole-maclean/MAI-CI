@@ -12,8 +12,6 @@ app = flask.Flask(__name__)
 
 rec = Recommender()
 
-
-
 @app.route("/")
 def index():   
     sparse_labels = [lbl if random.random() <=0.01 else '' for lbl in rec.labels]
