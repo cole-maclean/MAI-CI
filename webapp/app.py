@@ -71,6 +71,7 @@ def all():
 def recommend():
     #initial call to runplan which displays the planner simulation
     user = request.args.get('user')
+    print(user)
     if len(user) <=1:
         return 'Please input a username'
     recommendations = rec.user_recs(user)

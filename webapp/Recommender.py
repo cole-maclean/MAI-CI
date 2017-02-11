@@ -87,9 +87,9 @@ class Recommender():
         sub_probs = self.session.run(self.output_tensor, feed_dict={
             self.input_tensor: X
         })
-        recs = [np.argmax(probs) for probs in sub_probs]
-        filtered_recs = [filt_rec for filt_rec in recs if filt_rec not in user_sub_seq]
-        top_x_recs,cnt = zip(*Counter(filtered_recs).most_common(n_recs))
+        filtered_probs = [[prob if i not in user_sub_seq else 0 for i,prob in enumerate(prob_list)] for prob_list in sub_probs]
+        recs = [np.argmax(probs) for probs in filtered_probs]
+        top_x_recs,cnt = zip(*Counter(recs).most_common(n_recs))
         sub_recs = [self.labels[sub_index] for sub_index in top_x_recs]
         return sub_recs
 
