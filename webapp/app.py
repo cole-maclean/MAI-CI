@@ -105,8 +105,10 @@ def recommend():
                      source=source)
     p.add_layout(labels)
     script, div = components(p)
-
-    return flask.render_template("recommend.html",recommendations = recommendations,script=script, div=div)
+    if user:
+        return flask.render_template("recommend.html",recommendations = recommendations,script=script, div=div)
+    else:
+        return flask.render_template("index.html",script=script, div=div)
 
 if __name__ == "__main__":
     import os
