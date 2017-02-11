@@ -40,6 +40,33 @@ def index():
     script, div = components(p)
     return flask.render_template("index.html",script=script, div=div)
 
+@app.route("/all")
+def all():   
+    source = ColumnDataSource({'x':rec.embedding_weights[:,0],'y':rec.embedding_weights[:,1],'labels':rec.labels,'sparse_labels':rec.labels})
+    hover = HoverTool(
+            tooltips="""
+            <div>
+                <span>@labels</span>
+            </div>
+            """
+        )
+
+    TOOLS=[hover,"crosshair,pan,wheel_zoom,zoom_in,zoom_out,box_zoom,undo,redo,reset,tap,save,box_select,poly_select,lasso_select,"]
+
+    p = figure(tools=TOOLS)
+    p.sizing_mode = 'scale_width'
+
+    p.scatter("x", "y", radius=0.1, fill_alpha=0.6,
+              fill_color="#c7e9b4",
+              line_color=None,source=source)
+
+    labels = LabelSet(x="x", y="y", text="sparse_labels", y_offset=8,
+                      text_font_size="8pt", text_color="#555555", text_align='center',
+                     source=source)
+    p.add_layout(labels)
+    script, div = components(p)
+    return flask.render_template("all.html",script=script, div=div)
+
 @app.route("/recommend")
 def recommend():
     #initial call to runplan which displays the planner simulation
