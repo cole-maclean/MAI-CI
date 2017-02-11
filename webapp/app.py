@@ -71,6 +71,9 @@ def all():
 def recommend():
     #initial call to runplan which displays the planner simulation
     user = request.args.get('user')
+    print('user===PRINTPRNEFEAGDSAGDSSGFGFDG' + user)
+    if len(user) <=1:
+        return 'Please input a username'
     recommendations = rec.user_recs(user)
     colors = []
     for label in rec.labels:
@@ -105,10 +108,8 @@ def recommend():
                      source=source)
     p.add_layout(labels)
     script, div = components(p)
-    if user:
-        return flask.render_template("recommend.html",recommendations = recommendations,script=script, div=div)
-    else:
-        return flask.render_template("index.html",script=script, div=div)
+
+    return flask.render_template("recommend.html",recommendations = recommendations,script=script, div=div)
 
 if __name__ == "__main__":
     import os
