@@ -89,8 +89,11 @@ class Recommender():
         })
         filtered_probs = [[prob if i not in user_sub_seq else 0 for i,prob in enumerate(prob_list)] for prob_list in sub_probs]
         recs = [np.argmax(probs) for probs in filtered_probs]
-        top_x_recs,cnt = zip(*Counter(recs).most_common(n_recs))
-        sub_recs = [self.labels[sub_index] for sub_index in top_x_recs]
+        if recs:
+            top_x_recs,cnt = zip(*Counter(recs).most_common(n_recs))
+            sub_recs = [self.labels[sub_index] for sub_index in top_x_recs]
+        else:
+            sub_recs = []
         return sub_recs
 
 
