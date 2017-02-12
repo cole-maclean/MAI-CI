@@ -75,6 +75,9 @@ def recommend():
     if len(user) <=1:
         return 'Please input a username'
     recommendations = rec.user_recs(user)
+    flag = ''
+    if recommendations == []:
+        flag = "Not enough comment history to provide recommendations"
     colors = []
     for label in rec.labels:
         if label in recommendations:
@@ -109,7 +112,7 @@ def recommend():
     p.add_layout(labels)
     script, div = components(p)
 
-    return flask.render_template("recommend.html",recommendations = recommendations,script=script, div=div)
+    return flask.render_template("recommend.html",recommendations = recommendations,script=script, div=div, flag=flag)
 
 if __name__ == "__main__":
     import os
@@ -120,7 +123,7 @@ if __name__ == "__main__":
     #os.system("open http://localhost:{0}/".format(port))
 
     # Set up the development server on port 8000.
-    app.debug = True
+    app.debug = False
     app.run()
 
 
