@@ -19,17 +19,17 @@ class BuildRecommender():
         self.load_graph()
      
     def load_race_units(self):
-        with open("race_units.json", 'r') as infile:
+        with open("/home/ponderinghydrogen/MAI-CI/webapp/race_units.json", 'r') as infile:
             race_units = json.load(infile)
         return race_units
 
     def load_vocab(self):
-        with open("vocab.json", 'r') as  infile:
+        with open("/home/ponderinghydrogen/MAI-CI/webapp/vocab.json", 'r') as  infile:
             vocab = json.load(infile)
         return vocab
 
     def load_unit_ids(self):
-        with open("unit_ids.json", 'r') as infile:
+        with open("/home/ponderinghydrogen/MAI-CI/webapp/unit_ids.json", 'r') as infile:
             unit_ids = json.load(infile)
             unit_ids = {int(unit_id):name for unit_id,name in unit_ids.items()}
         return unit_ids
@@ -42,7 +42,7 @@ class BuildRecommender():
     def load_graph(self):
         # We load the protobuf file from the disk and parse it to retrieve the 
         # unserialized graph_def
-        with tf.gfile.GFile("C:/Users/macle/Desktop/Open Source Projects/autocraft/webapp/model/model.pb", "rb") as f:
+        with tf.gfile.GFile("model/sc2_model.pb", "rb") as f:
             graph_def = tf.GraphDef()
             graph_def.ParseFromString(f.read())
 
