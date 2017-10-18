@@ -1,7 +1,6 @@
 import flask
 from flask import request
 from Recommender import Recommender
-from BuildRecommender import BuildRecommender
 from bokeh.plotting import figure, show, output_notebook,output_file
 from bokeh.models import ColumnDataSource, LabelSet
 from bokeh.models import HoverTool
