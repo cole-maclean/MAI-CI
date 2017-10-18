@@ -35,7 +35,7 @@ def default_tree(tree,race):
     return tree
 
 @app.route("/sc2")
-def index():
+def sc2_index():
     default_race = 'Terran'
     races[0] = default_race + '0'
     races[1] = default_race + '1'
@@ -44,7 +44,7 @@ def index():
     return flask.render_template("sc2.html",tree_data=tree_data)
 
 @app.route("/sc2_default",methods=['GET','POST'])
-def default():
+def sc2_default():
     tree.clear()
     races[0] = request.form['friendly_race'] + '0'
     races[1] = request.form['enemy_race'] + '1'
@@ -53,7 +53,7 @@ def default():
     return flask.render_template("sc2.html",tree_data=tree_data)
 
 @app.route("/sc2_recommend",methods=['GET','POST'])
-def recommend():   
+def sc2_recommend():   
     if 'autobuild' in request.form.keys():
         autobuild_len = int(request.form["length_autobuild"])
         node_order = nx.shortest_path(tree,source=edge_nodes[0],target=edge_nodes[1])     
