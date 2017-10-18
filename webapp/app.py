@@ -58,7 +58,7 @@ def sc2_recommend():
         autobuild_len = int(request.form["length_autobuild"])
         node_order = nx.shortest_path(tree,source=edge_nodes[0],target=edge_nodes[1])     
         build_order = [tree.node[nd]['name'] for nd in node_order]
-        builds = rec.predict_build(pred_input=build_order,build_length=autobuild_len,races=races)
+        builds = sc2_rec.predict_build(pred_input=build_order,build_length=autobuild_len,races=races)
         for bld in builds:
             next_node = len(node_order) + 1
             tree.add_node(next_node,name=bld,parent=node_order[-1])
