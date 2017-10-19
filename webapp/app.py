@@ -32,7 +32,7 @@ def default_tree(tree,race):
 
 def build_response(tree,races,root):
     tree_data = json_graph.tree_data(tree,root=root)
-    resp = make_response(render_template('sc2.html',tree_data=tree_data))
+    resp = make_response(render_template('sc2.html',tree_data=tree_data,race=races[0],enemy_race=races[1]))
     resp.set_cookie('tree_data', json.dumps(tree_data))
     resp.set_cookie('races',json.dumps(races))
     print(json.dumps(tree_data))

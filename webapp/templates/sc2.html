@@ -32,14 +32,14 @@
   
   <form method = 'POST' action = '/sc2_default'>
     <select name="friendly_race">
-      <option value="Terran">Terran</option>
-      <option value="Protoss">Protoss</option>
-      <option value="Zerg">Zerg</option>
+      <option value="Terran" {% if race=='Terran0' %} selected {% endif %} >Terran</option>
+      <option value="Protoss" {% if race=='Protoss0' %} selected {% endif %} >Protoss</option>
+      <option value="Zerg" {% if race=='Zerg0' %} selected {% endif %} >Zerg</option>
     </select>
     <select name="enemy_race">
-      <option value="Terran">Terran</option>
-      <option value="Protoss">Protoss</option>
-      <option value="Zerg">Zerg</option>
+      <option value="Terran" {% if enemy_race=='Terran1' %} selected {% endif %} >Terran</option>
+      <option value="Protoss" {% if enemy_race=='Protoss1' %} selected {% endif %} >Protoss</option>
+      <option value="Zerg" {% if enemy_race=='Zerg1' %} selected {% endif %} >Zerg</option>
     </select>
     <input type="submit" value="submit">
   </form>
