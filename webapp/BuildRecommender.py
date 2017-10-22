@@ -71,10 +71,10 @@ class BuildRecommender():
             build_probs = sess.run(y, feed_dict={
                 x: pred_input
             })
-        return build_probs
+        return build_probs[0]
     
     def recurse_predictions(self,pred_input,preds,races,copy_vocab):
-        rec_build = np.argmax(preds[0])
+        rec_build = np.argmax(preds)
         rec = copy_vocab[rec_build]
         unit = rec[0:-1]
         player = int(rec[-1])
@@ -85,12 +85,12 @@ class BuildRecommender():
             copy_vocab.pop(rec_build)
             return self.recurse_predictions(pred_input,preds,races,copy_vocab)       
     
-    def predict_build(self,pred_input,build_length,races):
-        #using list creates copy
-        copy_vocab = list(self.vocab)
+    def predict_build(self,pred_input,build_length,races):     
         rec_builds = []
-        copy_input = list(pred_input)
+        copy_input = list(pred_input)     
         for i in range(build_length):
+            #using list creates copy
+            copy_vocab = list(self.vocab)
             build_probs = self.predict(copy_input)
             rec = self.recurse_predictions(copy_input,build_probs,races,copy_vocab)
             copy_input.append(rec)
