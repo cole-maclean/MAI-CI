@@ -61,12 +61,16 @@ class Recommender():
         #load user agent string
         reddit_user_agent = config.get('reddit', 'user_agent')
         client_id = config.get('reddit', 'client_id')
-        client_secret = config.get('reddit', 'client_api_key')
+        client_secret = config.get('reddit', 'client_secret')
+        password = config.get('reddit','password')
+        username = config.get('reddit', 'username')
 
-        r = praw.Reddit(user_agent=reddit_user_agent,client_id = client_id,client_secret=client_secret) #initialize the praw Reddit object
-        praw_user = r.get_redditor(user)
+        r = praw.Reddit(user_agent=reddit_user_agent,client_id = client_id,
+                        client_secret=client_secret, username=username,
+                        password=password) #initialize the praw Reddit object
+        praw_user = r.redditor(user)
         user_data = [(user_comment.subreddit.display_name,
-                      user_comment.created_utc) for user_comment in praw_user.get_comments(limit=None)]
+                      user_comment.created_utc) for user_comment in praw_user.comments.new(limit=None)]
         return sorted(user_data,key=lambda x: x[1]) #sort by ascending utc timestamp
 
     def user_recs(self,user,n_recs=10,chunk_size=15):
